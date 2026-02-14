@@ -56,8 +56,8 @@ class Crawler:
                     data = self._fetch_arxiv(source)
                 elif source.type == "arxiv_rss":
                     data = self._fetch_arxiv_rss(source)
-                elif source.type == "pubmed":
-                    data = self._fetch_pubmed(source)
+                elif source.type == "acl_anthology":
+                    data = self._fetch_acl_anthology(source)
                 elif source.type == "semantic_scholar":
                     data = self._fetch_semantic_scholar(source)
                 else:
@@ -414,91 +414,84 @@ class Crawler:
         return items[:max_results]
     
     def _fetch_pubmed(self, source: SourceConfig) -> List[FetchedItem]:
-        """从 PubMed 获取论文"""
-        import urllib.parse
-        import xml.etree.ElementTree as ET
+        """废弃 - 使用 acl_anthology 代替"""
+        return []
+    
+    def _fetch_acl_anthology(self, source: SourceConfig) -> List[FetchedItem]:
+        """从 ACL Anthology 获取论文 (ACL, EMNLP, NAACL, etc.)"""
+        import warnings
+        from bs4 import XMLParsedAsHTMLWarning
         
-        db = source.auth.get("db", "pubmed") if source.auth else "pubmed"
-        term = source.auth.get("term", "") if source.auth else ""
-        num_results = source.auth.get("max_results", 20) if source.auth else 20
-        sort = source.auth.get("sort", "pub_date")
+        warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
         
-        if not term:
-            logger.warning("PubMed 需要指定搜索词 (term)")
-            return []
-        
-        base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
-        
-        # 1. 搜索获取 IDs
-        search_url = f"{base_url}/esearch.fcgi"
-        params = {"db": db, "term": term, "retmax": num_results, "sort": sort, "retmode": "json"}
-        
-        logger.info(f"搜索 PubMed: {term}")
-        response = self.session.get(search_url, params=params, timeout=self.config.settings.timeout)
-        response.raise_for_status()
-        
-        search_data = response.json()
-        id_list = search_data.get("esearchresult", {}).get("idlist", [])
-        
-        if not id_list:
-            return []
-        
-        # 2. 获取详情
-        fetch_url = f"{base_url}/efetch.fcgi"
-        params = {"db": db, "id": ",".join(id_list), "retmode": "xml"}
-        
-        response = self.session.get(fetch_url, params=params, timeout=self.config.settings.timeout)
-        root = ET.fromstring(response.text)
+        conferences = source.auth.get("conferences", []) if source.auth else []
+        max_results = source.auth.get("max_results", 20) if source.auth else 20
         
         items = []
-        for article in root.findall(".//PubmedArticle"):
-            title_elem = article.find(".//ArticleTitle")
-            title = title_elem.text.strip() if title_elem is not None and title_elem.text else "Untitled"
-            
-            abstract_elems = article.findall(".//AbstractText")
-            abstract = " ".join(e.text.strip() for e in abstract_elems if e is not None and e.text)
-            
-            authors = []
-            for author in article.findall(".//Author"):
-                last_name = author.find("LastName")
-                fore_name = author.find("ForeName")
-                if last_name is not None:
-                    name = f"{fore_name.text.strip()} {last_name.text.strip()}" if fore_name is not None and fore_name.text else last_name.text.strip()
-                    authors.append(name)
-            
-            pub_date = article.find(".//PubDate")
-            date = None
-            if pub_date is not None:
-                year = pub_date.find("Year")
-                month = pub_date.find("Month")
-                if year is not None and year.text:
-                    date = year.text
-                    if month is not None and month.text:
-                        date = f"{year.text}-{month.text}"
-            
-            doi_elem = article.find(".//ArticleId[@IdType='doi']")
-            doi = doi_elem.text if doi_elem is not None and doi_elem.text else None
-            paper_url = f"https://doi.org/{doi}" if doi else None
-            
-            pmid_elem = article.find(".//PMID")
-            pmid = pmid_elem.text if pmid_elem is not None and pmid_elem.text else None
-            
-            if not paper_url and pmid:
-                paper_url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
-            
-            items.append(FetchedItem(
-                source=source.name,
-                title=f"[{pmid}] {title}" if pmid else title,
-                content=abstract,
-                url=paper_url,
-                date=date,
-                authors=authors,
-                abstract=abstract,
-                categories=[term],
-                metadata={"pmid": pmid, "doi": doi, "source": "pubmed"}
-            ))
         
-        return items
+        rss_url = "https://aclanthology.org/rss-feed.xml"
+        
+        logger.info("获取 ACL Anthology 论文")
+        
+        try:
+            response = self.session.get(rss_url, timeout=self.config.settings.timeout)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, "lxml")
+            entries = soup.find_all("item")
+            
+            for entry in entries:
+                title_elem = entry.find("title")
+                title = title_elem.get_text(strip=True) if title_elem else "Untitled"
+                
+                link_elem = entry.find("link")
+                paper_url = link_elem.get_text(strip=True) if link_elem else None
+                
+                desc_elem = entry.find("description")
+                abstract = desc_elem.get_text(strip=True) if desc_elem else ""
+                
+                pub_date_elem = entry.find("pubDate")
+                date = None
+                if pub_date_elem:
+                    from email.utils import parsedate_to_datetime
+                    try:
+                        dt = parsedate_to_datetime(pub_date_elem.get_text(strip=True))
+                        date = dt.isoformat()
+                    except:
+                        pass
+                
+                categories = []
+                for cat in entry.find_all("category"):
+                    cat_text = cat.get_text(strip=True)
+                    if cat_text:
+                        categories.append(cat_text)
+                
+                conference = None
+                for cat in categories:
+                    if cat in ["ACL", "EMNLP", "NAACL", "EACL", "COLING", "AAACL", "Findings"]:
+                        conference = cat
+                        break
+                
+                if conferences and conference not in conferences:
+                    continue
+                
+                items.append(FetchedItem(
+                    source=source.name,
+                    title=title,
+                    content=abstract,
+                    url=paper_url,
+                    date=date,
+                    authors=[],
+                    abstract=abstract,
+                    categories=categories,
+                    metadata={"conference": conference, "source": "acl_anthology"}
+                ))
+                
+        except Exception as e:
+            logger.error(f"获取 ACL Anthology 失败: {e}")
+        
+        items.sort(key=lambda x: x.date or "", reverse=True)
+        return items[:max_results]
     
     def _fetch_semantic_scholar(self, source: SourceConfig) -> List[FetchedItem]:
         """从 Semantic Scholar 获取论文"""
