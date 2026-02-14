@@ -36,6 +36,7 @@ class TemplateRenderer:
         # 添加自定义过滤器
         self.env.filters["date"] = self._format_date
         self.env.filters["truncate"] = self._truncate
+        self.env.filters["source_info"] = self._get_source_info
     
     def render(self, items: List[FetchedItem]) -> Path:
         """渲染模板生成网站"""
@@ -173,3 +174,44 @@ class TemplateRenderer:
         if len(value) <= length:
             return value
         return value[:length].rstrip() + suffix
+    
+    @staticmethod
+    def _get_source_info(item):
+        """解析来源信息，返回 (来源类型, 会议/期刊) 元组"""
+        source = item.source if hasattr(item, 'source') else str(item)
+        metadata = item.metadata if hasattr(item, 'metadata') else {}
+        
+        # 判断来源类型
+        source_type = "未知"
+        venue = None
+        
+        # 从 source 字符串解析
+        if "arxiv" in source.lower():
+            source_type = "arXiv RSS"
+            # 从 metadata 获取分类
+            if metadata.get("category"):
+                pass  # arXiv 不需要显示分类
+        elif "dblp" in source.lower():
+            # 判断是 API 还是 RSS
+            if metadata.get("source") == "dblp_rss":
+                source_type = "DBLP RSS"
+            else:
+                source_type = "DBLP API"
+            
+            # 获取会议/期刊信息
+            venue = metadata.get("venue")
+            if not venue:
+                # 尝试从 source 字符串提取
+                parts = source.split("/")
+                if len(parts) > 1:
+                    venue = parts[-1]
+        elif "acl" in source.lower() or "anthology" in source.lower():
+            source_type = "ACL Anthology"
+            venue = metadata.get("conference")
+        
+        # 返回字典，方便模板使用
+        return {
+            "type": source_type,
+            "venue": venue,
+            "raw": source
+        }

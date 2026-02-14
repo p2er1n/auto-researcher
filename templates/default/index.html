@@ -97,10 +97,27 @@
             gap: 10px;
         }
         
-        .item .source {
-            background: #eee;
+        .item .source-info {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .item .source-type {
+            background: #667eea;
+            color: white;
             padding: 3px 10px;
             border-radius: 12px;
+            font-size: 0.8em;
+        }
+        
+        .item .venue {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
         }
         
         .item .categories {
@@ -110,8 +127,8 @@
         }
         
         .item .category {
-            background: #e8f5e9;
-            color: #2e7d32;
+            background: #e3f2fd;
+            color: #1565c0;
             padding: 2px 8px;
             border-radius: 4px;
             font-size: 0.8em;
@@ -171,6 +188,7 @@
         <div class="items">
             {% if items %}
                 {% for item in items %}
+                {% set info = item | source_info %}
                 <div class="item">
                     <h2>{{ item.title | truncate(100) }}</h2>
                     
@@ -192,7 +210,12 @@
                         {{ item.content | truncate(500) }}
                     </div>
                     <div class="footer">
-                        <span class="source">{{ item.source }}</span>
+                        <div class="source-info">
+                            <span class="source-type">{{ info.type }}</span>
+                            {% if info.venue %}
+                            <span class="venue">{{ info.venue }}</span>
+                            {% endif %}
+                        </div>
                         <span class="date">{{ item.date | default("") }}</span>
                         {% if item.url %}
                             {% if 'arxiv.org' in item.url %}
