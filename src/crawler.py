@@ -219,6 +219,8 @@ class Crawler:
         soup = BeautifulSoup(response.text, "xml")
         entries = soup.find_all("entry")
         
+        logger.info(f"arXiv API 返回条目数: {len(entries)}")
+        
         items = []
         for entry in entries:
             # 提取论文信息
