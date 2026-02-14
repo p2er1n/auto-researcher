@@ -654,15 +654,13 @@ class Crawler:
         """
         items = []
         
-        # DBLP 会议论文页面 URL 模式: https://dblp.org/db/conf/{acronym}/
-        # 例如: https://dblp.org/db/conf/cvpr/ -> cvpr2025, cvpr2024, ...
-        
         for conf in conferences:
             logger.info(f"获取 DBLP 会议论文: {conf}")
             
             try:
                 # 访问会议索引页面，获取最新会议列表
-                conf_index_url = f"https://dblp.org/db/conf/{conf}/"
+                # 新版 DBLP URL: https://dblp.org/db/conf/{acronym}/index.html
+                conf_index_url = f"https://dblp.org/db/conf/{conf}/index.html"
                 response = self.session.get(conf_index_url, timeout=self.config.settings.timeout)
                 
                 if response.status_code != 200:
@@ -672,18 +670,19 @@ class Crawler:
                 soup = BeautifulSoup(response.text, "lxml")
                 
                 # 查找最新会议的链接
-                # DBLP 页面结构: 找到 'head' 部分的链接列表
                 # 链接格式如: cvpr2025.html, cvpr2024.html
-                
-                # 获取页面中所有以 {conf}{年份}.html 格式的链接
                 conf_links = []
                 for link in soup.find_all("a", href=True):
                     href = link.get("href", "")
                     # 匹配如 cvpr2025.html, iccv2025.html 等
-                    if href.startswith(conf) and href.endswith(".html") and href[len(conf):].startswith("20"):
-                        year_str = href[len(conf):len(conf)+4]
-                        if year_str.isdigit():
-                            conf_links.append((href, year_str))
+                    # 需要包含完整路径如 /db/conf/cvpr/cvpr2025.html
+                    if f"/{conf}" in href and href.endswith(".html"):
+                        # 提取年份
+                        import re
+                        match = re.search(rf'{conf}(\d{{4}})\.html', href)
+                        if match:
+                            year = match.group(1)
+                            conf_links.append((href, year))
                 
                 if not conf_links:
                     logger.warning(f"未找到 {conf} 的会议论文页面")
@@ -692,74 +691,74 @@ class Crawler:
                 # 按年份排序，取最新的
                 conf_links.sort(key=lambda x: x[1], reverse=True)
                 
-                # 获取最新的几个会议
-                for href, year in conf_links[:3]:
-                    conf_url = f"https://dblp.org{href}"
-                    logger.info(f"解析会议论文: {conf_url}")
+                # 获取最新的会议
+                href, year = conf_links[0]
+                conf_url = f"https://dblp.org{href}"
+                logger.info(f"解析会议论文: {conf_url}")
+                
+                # 获取会议论文页面
+                conf_response = self.session.get(conf_url, timeout=self.config.settings.timeout)
+                if conf_response.status_code != 200:
+                    logger.warning(f"无法获取会议论文页面: {conf_url}")
+                    continue
+                
+                conf_soup = BeautifulSoup(conf_response.text, "lxml")
+                
+                # 解析论文列表
+                # DBLP 论文页面结构: 在 <ul class="publ-list"> 下的 <li> 元素中
+                paper_count = 0
+                
+                # 查找所有论文条目
+                for paper in conf_soup.find_all("li", class_="entry"):
+                    if paper_count >= max_results:
+                        break
                     
-                    # 获取会议论文页面
-                    conf_response = self.session.get(conf_url, timeout=self.config.settings.timeout)
-                    if conf_response.status_code != 200:
+                    # 提取标题
+                    title_elem = paper.find("span", class_="title")
+                    if not title_elem:
                         continue
+                    title = title_elem.get_text(strip=True)
                     
-                    conf_soup = BeautifulSoup(conf_response.text, "lxml")
+                    # 提取作者
+                    authors = []
+                    for author in paper.find_all("span", class_="author"):
+                        author_name = author.get_text(strip=True)
+                        if author_name:
+                            authors.append(author_name)
                     
-                    # 解析论文列表
-                    # DBLP 论文页面结构: 查找 class="publ" 的元素
-                    # 每个论文在 <span class="title"> 标题 </span> 中
-                    
-                    paper_count = 0
-                    for paper in conf_soup.find_all("li", class_="article"):
-                        if paper_count >= max_results:
+                    # 提取链接 - 优先选择 PDF 或 DBLP 详情页
+                    paper_url = None
+                    for link in paper.find_all("a", href=True):
+                        href_link = link.get("href", "")
+                        if href_link.endswith(".pdf"):
+                            paper_url = href_link
                             break
-                        
-                        # 提取标题
-                        title_elem = paper.find("span", class_="title")
-                        if not title_elem:
-                            continue
-                        title = title_elem.get_text(strip=True)
-                        
-                        # 提取作者
-                        authors = []
-                        for author in paper.find_all("span", class_="author"):
-                            author_name = author.get_text(strip=True)
-                            if author_name:
-                                authors.append(author_name)
-                        
-                        # 提取链接
-                        paper_url = None
-                        for link in paper.find_all("a", href=True):
-                            href = link.get("href", "")
-                            # 优先选择 PDF 链接或论文详情链接
-                            if ".pdf" in href.lower():
-                                paper_url = href
-                                break
-                            elif href.startswith("https://dblp.org/rec/"):
-                                paper_url = href
-                        
-                        # 提取年份
-                        year_elem = paper.find("span", class_="year")
-                        paper_year = year if not year_elem else year_elem.get_text(strip=True)
-                        
-                        if title:
-                            items.append(FetchedItem(
-                                source=f"DBLP RSS/{conf.upper()}",
-                                title=title,
-                                content=f"{conf.upper()} {paper_year}",
-                                url=paper_url,
-                                date=paper_year,
-                                authors=authors,
-                                abstract=f"{title}",
-                                categories=[conf.upper()],
-                                metadata={
-                                    "source": "dblp_rss",
-                                    "venue": conf.upper(),
-                                    "year": paper_year
-                                }
-                            ))
-                            paper_count += 1
+                        elif "dblp.org/rec/" in href_link:
+                            paper_url = href_link
                     
-                    logger.info(f"从 {conf.upper()}{year} 获取到 {paper_count} 篇论文")
+                    # 提取年份
+                    year_elem = paper.find("span", class_="year")
+                    paper_year = year if not year_elem else year_elem.get_text(strip=True)
+                    
+                    if title:
+                        items.append(FetchedItem(
+                            source=f"DBLP RSS/{conf.upper()}",
+                            title=title,
+                            content=f"{conf.upper()} {paper_year}",
+                            url=paper_url,
+                            date=paper_year,
+                            authors=authors,
+                            abstract=f"{title}",
+                            categories=[conf.upper()],
+                            metadata={
+                                "source": "dblp_rss",
+                                "venue": conf.upper(),
+                                "year": paper_year
+                            }
+                        ))
+                        paper_count += 1
+                
+                logger.info(f"从 {conf.upper()}{year} 获取到 {paper_count} 篇论文")
                     
             except Exception as e:
                 logger.error(f"获取 DBLP {conf} 失败: {e}")
