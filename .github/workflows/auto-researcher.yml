@@ -36,6 +36,8 @@ jobs:
       # 检出代码
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       
       # 设置 Python
       - name: Set up Python
@@ -58,17 +60,45 @@ jobs:
         run: |
           python src/main.py --config config.yaml --output dists
       
-      # 配置 GitHub Pages
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+      # 配置 Git 用户
+      - name: Configure Git
+        run: |
+          git config --global user.name "AutoResearcher"
+          git config --global user.email "bot@autoreseacher.dev"
       
-      # 上传到 Pages
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: 'dists'
+      # 切换到 gh-pages 分支
+      - name: Checkout gh-pages
+        run: |
+          git checkout gh-pages || git checkout --orphan gh-pages
       
-      # 部署
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      # 删除旧内容（保留 .git）
+      - name: Clean old content
+        run: |
+          ls -la
+          # 保留 .git 目录，其他全部删除
+          find . -maxdepth 1 ! -name '.git*' ! -name '.' -exec rm -rf {} + 2>/dev/null || true
+      
+      # 复制新生成的内容
+      - name: Copy new content
+        run: |
+          cp -r dists/* .
+          rm -rf dists
+      
+      # 提交并推送
+      - name: Commit and Push
+        run: |
+          git add -A
+          git status
+          # 检查是否有更改
+          if [ -n "$(git diff --cached --name-only)" ]; then
+            git commit -m "AutoResearcher: 更新网站 $(date '+%Y-%m-%d %H:%M')"
+            git push -f origin gh-pages
+            echo "✅ 已部署到 GitHub Pages"
+          else
+            echo "没有新内容需要部署"
+          fi
+      
+      # 获取部署 URL
+      - name: Get deployment URL
+        run: |
+          echo "网站已部署到: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"

@@ -103,7 +103,7 @@ class TemplateRenderer:
                 sites.append({
                     "name": dist_dir.name,
                     "title": title,
-                    "url": f"{dist_name}/index.html"
+                    "url": f"{dist_dir.name}/index.html"
                 })
         
         # 渲染 index 模板
