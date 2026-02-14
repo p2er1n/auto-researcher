@@ -64,12 +64,23 @@ jobs:
           mkdir -p gh-pages
           cp -r dists/* gh-pages/ 2>/dev/null || true
           
+          # 列出所有目录
+          echo "=== 当前目录列表 ==="
+          ls -lt gh-pages/ | head -20
+          
           # 清理旧构建，只保留最新的5个
           cd gh-pages
-          dirs=$(ls -td */ 2>/dev/null | head -10)
-          count=$(echo "$dirs" | wc -l)
+          
+          # 获取所有以日期开头的目录
+          target_dirs=$(ls -d 20* 2>/dev/null)
+          count=$(echo "$target_dirs" | wc -w)
+          echo "=== 目录数量: $count ==="
+          
           if [ "$count" -gt 5 ]; then
-            echo "$dirs" | tail -n +6 | xargs rm -rf 2>/dev/null || true
+            # 按修改时间排序，删除旧的
+            to_delete=$(ls -t | tail -n +6)
+            echo "=== 将删除: $to_delete ==="
+            echo "$to_delete" | xargs rm -rf 2>/dev/null || true
             echo "已清理旧构建，保留最新5个"
           fi
           cd ..
