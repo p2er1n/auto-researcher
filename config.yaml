@@ -1,6 +1,6 @@
 # 采集任务配置
 tasks:
-  - name: "AI/CV学术论文"
+  - name: "具身智能 & VLA 学术论文"
     interval: "6h"
     
     # 数据源配置
@@ -18,14 +18,17 @@ tasks:
             - "iclr"
             - "aaai"
             - "icml"
+            - "iros"
+            - "coRL"
+            - "RSS"
           max_results: 10
       
       # DBLP 搜索 (可选，补充搜索)
       - type: "dblp"
-        name: "DBLP VLA搜索"
+        name: "DBLP 具身智能搜索"
         url: "https://dblp.org"
         auth:
-          query: "vision language action"
+          query: "embodied intelligence vision language action robot"
           max_results: 10
       
       # arXiv RSS (每天更新一次)
@@ -38,6 +41,7 @@ tasks:
             - "cs.AI"
             - "cs.LG"
             - "cs.RO"
+            - "cs.CL"
           max_results: 10
       
       # arXiv 库 (使用 Python arxiv 库，更稳定)
@@ -50,13 +54,30 @@ tasks:
             - "cs.AI"
             - "cs.LG"
             - "cs.RO"
+            - "cs.CL"
           max_results: 15
     
     # 筛选规则
     filters:
-      # 关键词 - VLA/CV方向
+      # 关键词 - 具身智能/VLA方向
       - type: "keyword"
-        keywords: ["VLA", "vision", "robotics", "embodied", "manipulation", "detection", "segmentation", "learning", "neural", "deep", "LLM", "multimodal"]
+        keywords: [
+          "VLA", "Vision-Language-Action", "Vision Language Action",
+          "embodied", "embodied intelligence", "具身智能",
+          "robot", "robotics", "robotic", "机器人",
+          "manipulation", "grasping", " dexterous manipulation",
+          "navigation", "visual navigation", "language navigation",
+          "humanoid", "android", "仿人机器人",
+          "sim-to-real", "domain randomization", "sim2real",
+          "reinforcement learning", "RL", "强化学习",
+          "imitation learning", "behavior cloning", "模仿学习",
+          "LLM robot", "large language model robot", "语言模型机器人",
+          "multimodal", "multimodal learning",
+          "foundation model", "visual foundation model",
+          "scene understanding", "3D understanding",
+          "object detection", "object recognition",
+          "semantic understanding", "scene graph"
+        ]
         action: "keep"
         scope: "all"
         case_sensitive: false
@@ -71,11 +92,11 @@ tasks:
     
     # 模板配置
     template: "default"
-    output: "ai-cv-papers"
+    output: "embodied-vla-papers"
     
     variables:
-      site_title: "AI/CV 学术论文"
-      site_description: "自动追踪 CVPR, NeurIPS, AAAI, ICLR 等顶会最新论文"
+      site_title: "具身智能 & VLA 学术论文"
+      site_description: "自动追踪 CVPR, NeurIPS, ICLR, CoRL, RSS 等顶会最新具身智能、VLA、机器人相关论文"
 
 # 全局设置
 settings:
