@@ -117,3 +117,4 @@ settings:
 - 运行采集程序
 - 生成静态网站
 - 部署到 GitHub Pages
+# Force rebuild
