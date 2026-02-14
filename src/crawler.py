@@ -192,11 +192,18 @@ class Crawler:
         
         # 构建查询
         query_parts = [search_query]
-        for cat in categories:
-            if cat.startswith("cat:"):
-                query_parts.append(cat)
-            else:
-                query_parts.append(f"cat:{cat}")
+        
+        # 如果有多个类别，用 OR 连接，然后与 search_query 用 AND 连接
+        if categories:
+            cat_queries = []
+            for cat in categories:
+                if cat.startswith("cat:"):
+                    cat_queries.append(cat)
+                else:
+                    cat_queries.append(f"cat:{cat}")
+            
+            categories_query = "+OR+".join(cat_queries)
+            query_parts.append(categories_query)
         
         query = "+AND+".join(query_parts)
         
