@@ -98,7 +98,7 @@ jobs:
           # 检查是否有更改
           if [ -n "$(git diff --cached --name-only)" ]; then
             git commit -m "AutoResearcher: 更新网站 $(date '+%Y-%m-%d %H:%M')"
-            git push -f origin gh-pages
+            git push -f https://${{ secrets.GITHUB_ACTOR }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} gh-pages
             echo "✅ 已部署到 GitHub Pages"
           else
             echo "没有新内容需要部署"
