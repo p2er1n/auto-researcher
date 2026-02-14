@@ -1,46 +1,58 @@
 # 采集任务配置
 tasks:
-  - name: "AI/ML学术论文"
+  - name: "AI/CV学术论文"
     interval: "6h"
     
     # 数据源配置
     sources:
-      # 1. arXiv RSS (主要来源，覆盖大部分AI会议)
+      # DBLP RSS 订阅 - 获取最新会议论文集
+      - type: "dblp"
+        name: "DBLP CV/NeurIPS会议"
+        url: "https://dblp.org"
+        auth:
+          # 订阅的会议列表
+          conferences:
+            - "cvpr"
+            - "iccv"
+            - "neurips"
+            - "iclr"
+            - "aaai"
+            - "icml"
+          max_results: 10
+      
+      # DBLP 搜索 (可选，补充搜索)
+      - type: "dblp"
+        name: "DBLP VLA搜索"
+        url: "https://dblp.org"
+        auth:
+          query: "vision language action"
+          max_results: 10
+      
+      # arXiv RSS
       - type: "arxiv_rss"
-        name: "arXiv AI/ML最新论文"
+        name: "arXiv AI/ML/CV论文"
         url: "https://arxiv.org"
         auth:
           categories:
-            - "cs.AI"   # Artificial Intelligence
-            - "cs.LG"   # Machine Learning
-            - "cs.CL"   # Computation and Language
-            - "cs.CV"   # Computer Vision
-            - "cs.RO"   # Robotics
-            - "cs.NE"   # Neural and Evolutionary Computing
+            - "cs.CV"
+            - "cs.AI"
+            - "cs.LG"
+            - "cs.RO"
           max_results: 15
           feed_type: "rss"
-      
-      # 2. ACL Anthology (NLP顶会: ACL, EMNLP, NAACL, etc.)
-      - type: "acl_anthology"
-        name: "ACL Anthology NLP论文"
-        url: "https://aclanthology.org"
-        auth:
-          # 可选: 筛选特定会议 ["ACL", "EMNLP", "NAACL", "EACL", "COLING", "Findings"]
-          # conferences: ["ACL", "EMNLP"]
-          max_results: 10
     
     # 筛选规则
     filters:
-      # 关键词筛选
+      # 关键词 - VLA/CV方向
       - type: "keyword"
-        keywords: ["large language model", "LLM", "VLA", "multimodal", "vision language", "transformer", "GPT", "diffusion", "reinforcement learning"]
+        keywords: ["VLA", "vision", "robotics", "embodied", "manipulation", "detection", "segmentation", "learning", "neural", "deep", "LLM", "multimodal"]
         action: "keep"
         scope: "all"
         case_sensitive: false
       
       # 长度筛选
       - type: "length"
-        min: 50
+        min: 10
       
       # 去重
       - type: "deduplicate"
@@ -48,11 +60,11 @@ tasks:
     
     # 模板配置
     template: "default"
-    output: "ai-papers"
+    output: "ai-cv-papers"
     
     variables:
-      site_title: "AI/ML 学术论文"
-      site_description: "自动追踪 arXiv + ACL Anthology AI/ML 最新论文"
+      site_title: "AI/CV 学术论文"
+      site_description: "自动追踪 CVPR, NeurIPS, AAAI, ICLR 等顶会最新论文"
 
 # 全局设置
 settings:

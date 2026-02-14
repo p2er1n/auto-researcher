@@ -60,6 +60,8 @@ class Crawler:
                     data = self._fetch_acl_anthology(source)
                 elif source.type == "semantic_scholar":
                     data = self._fetch_semantic_scholar(source)
+                elif source.type == "dblp":
+                    data = self._fetch_dblp(source)
                 else:
                     logger.warning(f"未知数据源类型: {source.type}")
                     continue
@@ -413,10 +415,6 @@ class Crawler:
         max_results = source.auth.get("max_results", 20) if source.auth else 20
         return items[:max_results]
     
-    def _fetch_pubmed(self, source: SourceConfig) -> List[FetchedItem]:
-        """废弃 - 使用 acl_anthology 代替"""
-        return []
-    
     def _fetch_acl_anthology(self, source: SourceConfig) -> List[FetchedItem]:
         """从 ACL Anthology 获取论文 (ACL, EMNLP, NAACL, etc.)"""
         import warnings
@@ -533,6 +531,175 @@ class Crawler:
                 metadata={"paperId": paper.get("paperId"), "venue": venue, "source": "semantic_scholar"}
             ))
         
+        return items
+    
+    def _fetch_dblp(self, source: SourceConfig) -> List[FetchedItem]:
+        """从 DBLP 获取顶会和期刊论文
+        
+        支持两种方式:
+        1. 搜索 API: 通过关键词搜索论文
+        2. RSS 订阅: 获取最新会议论文集，然后筛选
+        """
+        import warnings
+        from bs4 import XMLParsedAsHTMLWarning
+        
+        warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+        
+        # 搜索模式
+        query = source.auth.get("query", "") if source.auth else ""
+        max_results = source.auth.get("max_results", 20) if source.auth else 20
+        
+        # RSS 订阅模式
+        conferences = source.auth.get("conferences", []) if source.auth else []
+        
+        items = []
+        
+        # 方式1: 关键词搜索 (已有实现)
+        if query:
+            items.extend(self._fetch_dblp_search(query, max_results))
+        
+        # 方式2: RSS 订阅 - 获取最新会议论文集
+        if conferences:
+            rss_items = self._fetch_dblp_rss(conferences, max_results)
+            items.extend(rss_items)
+        
+        # 去重
+        seen = set()
+        unique_items = []
+        for item in items:
+            if item.title not in seen:
+                seen.add(item.title)
+                unique_items.append(item)
+        
+        return unique_items[:max_results]
+    
+    def _fetch_dblp_search(self, query: str, max_results: int) -> List[FetchedItem]:
+        """使用 DBLP 搜索 API"""
+        import json
+        
+        search_term = query.replace(" ", "+")
+        api_url = f"https://dblp.org/search/publ/api?q={search_term}&h={max_results}&format=json"
+        
+        logger.info(f"DBLP 搜索: {query}")
+        items = []
+        
+        try:
+            response = self.session.get(api_url, timeout=self.config.settings.timeout)
+            response.raise_for_status()
+            
+            data = response.json()
+            hits = data.get("result", {}).get("hits", {})
+            hit_list = hits.get("hit", [])
+            
+            for hit in hit_list:
+                info = hit.get("info", {})
+                title = info.get("title", "Untitled")
+                title = title.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+                
+                authors_data = info.get("authors", {}).get("author", [])
+                if isinstance(authors_data, dict):
+                    authors_data = [authors_data]
+                authors = [a.get("text", "") for a in authors_data if a.get("text")]
+                
+                venue = info.get("venue", "")
+                year = info.get("year", "")
+                paper_url = info.get("ee", "") or info.get("url", "")
+                doi = info.get("doi", "")
+                
+                # 如果是 DOI 链接且包含 arXiv，转换为直接 arXiv 链接
+                if paper_url and "doi.org" in paper_url and "arXiv" in paper_url:
+                    arxiv_id = paper_url.split("arXiv.")[-1] if "arXiv." in paper_url else ""
+                    if arxiv_id:
+                        paper_url = f"https://arxiv.org/abs/{arxiv_id}"
+                
+                items.append(FetchedItem(
+                    source=f"DBLP/{venue}" if venue else "DBLP",
+                    title=title,
+                    content=f"{venue} ({year})",
+                    url=paper_url,
+                    date=year if year else None,
+                    authors=authors,
+                    abstract=f"{title}. {venue} ({year})",
+                    categories=[venue] if venue else [],
+                    metadata={"source": "dblp", "venue": venue, "year": year, "doi": doi}
+                ))
+            
+            logger.info(f"DBLP 搜索获取到 {len(items)} 条")
+            
+        except Exception as e:
+            logger.error(f"DBLP 搜索失败: {e}")
+        
+        return items
+    
+    def _fetch_dblp_rss(self, conferences: List[str], max_results: int) -> List[FetchedItem]:
+        """从 DBLP RSS 获取最新会议论文集并筛选指定会议
+        
+        DBLP 只有单一 RSS: https://dblp.org/feed/
+        返回最新出版的会议论文集，需要进一步解析获取具体论文
+        """
+        rss_url = "https://dblp.org/feed/"
+        
+        logger.info(f"获取 DBLP RSS (筛选: {conferences})")
+        items = []
+        
+        try:
+            response = self.session.get(rss_url, timeout=self.config.settings.timeout)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, "lxml-xml")
+            channel = soup.find("channel")
+            if not channel:
+                return items
+            
+            # 遍历所有条目
+            for item in channel.find_all("item"):
+                title_elem = item.find("title")
+                title = title_elem.get_text(strip=True) if title_elem else ""
+                
+                link_elem = item.find("link")
+                link = link_elem.get_text(strip=True) if link_elem else ""
+                
+                # 检查是否匹配目标会议
+                matched_conf = None
+                for conf in conferences:
+                    if conf.lower() in title.lower():
+                        matched_conf = conf
+                        break
+                
+                if not matched_conf:
+                    # 也检查链接
+                    for conf in conferences:
+                        if f"/{conf.lower()}/" in link.lower():
+                            matched_conf = conf
+                            break
+                
+                if matched_conf:
+                    pub_date_elem = item.find("pubDate")
+                    date = None
+                    if pub_date_elem:
+                        from email.utils import parsedate_to_datetime
+                        try:
+                            dt = parsedate_to_datetime(pub_date_elem.get_text(strip=True))
+                            date = dt.isoformat()
+                        except:
+                            pass
+                    
+                    items.append(FetchedItem(
+                        source=f"DBLP/{matched_conf}",
+                        title=title,
+                        content=f"最新会议论文集: {title}",
+                        url=link,
+                        date=date,
+                        authors=[],
+                        abstract=f"DBLP RSS 获取: {title}",
+                        categories=[matched_conf],
+                        metadata={"source": "dblp_rss", "venue": matched_conf, "link": link}
+                    ))
+                    
+        except Exception as e:
+            logger.error(f"DBLP RSS 获取失败: {e}")
+        
+        logger.info(f"DBLP RSS 匹配到 {len(items)} 个会议论文集")
         return items
     
     def close(self):
