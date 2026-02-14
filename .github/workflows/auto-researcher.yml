@@ -69,47 +69,55 @@ jobs:
         run: |
           python src/main.py --config config.yaml --output dists
       
-      # 复制新内容到 gh-pages 目录（不删除旧的）
+      # 复制新内容到 gh-pages 目录（保留旧的）
       - name: Copy to gh-pages
         run: |
-          # 创建 gh-pages 目录结构（如果不存在）
+          # 如果 gh-pages 目录不存在，创建它
           mkdir -p gh-pages
           
-          # 复制新生成的内容
+          # 复制新生成的内容到 gh-pages
           cp -r dists/* gh-pages/ 2>/dev/null || true
           
-          # 更新网站列表 index.html
+          # 切换到 gh-pages 目录生成列表
           cd gh-pages
-          # 生成网站列表
-          echo '<!DOCTYPE html>
-          <html>
-          <head>
-          <meta charset="utf-8">
-          <title>AutoResearcher - 网站列表</title>
-          <style>
-          body { font-family: system-ui; max-width: 800px; margin: 50px auto; padding: 20px; }
-          h1 { color: #333; }
-          ul { list-style: none; padding: 0; }
-          li { padding: 10px; margin: 5px 0; background: #f5f5f5; border-radius: 4px; }
-          a { color: #0066cc; text-decoration: none; }
-          a:hover { text-decoration: underline; }
-          </style>
-          </head>
-          <body>
-          <h1>AutoResearcher - 网站列表</h1>
-          <ul>' > index.html
           
-          # 按时间倒序列出所有文件夹
-          for dir in $(ls -td */ 2>/dev/null | head -20); do
+          # 收集所有历史文件夹（最多保留30个）
+          dirs=$(ls -td */ 2>/dev/null | head -30)
+          
+          # 生成 index.html
+          cat > index.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AutoResearcher - 网站列表</title>
+<style>
+body { font-family: system-ui; max-width: 800px; margin: 50px auto; padding: 20px; }
+h1 { color: #333; }
+ul { list-style: none; padding: 0; }
+li { padding: 10px; margin: 5px 0; background: #f5f5f5; border-radius: 4px; }
+a { color: #0066cc; text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>AutoResearcher - 网站列表</h1>
+<ul>
+EOF
+          
+          # 添加所有文件夹链接（按时间倒序）
+          for dir in $dirs; do
             if [ -f "${dir}index.html" ]; then
               name=$(basename "$dir")
               echo "<li><a href=\"${name}/index.html\">${name}</a></li>" >> index.html
             fi
           done
           
-          echo '</ul>
-          </body>
-          </html>' >> index.html
+          cat >> index.html << 'EOF'
+</ul>
+</body>
+</html>
+EOF
       
       # 部署到 GitHub Pages
       - name: Deploy to GitHub Pages
