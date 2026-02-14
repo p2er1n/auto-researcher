@@ -69,8 +69,8 @@ jobs:
         run: |
           python src/main.py --config config.yaml --output dists
       
-      # 复制新内容到 gh-pages 目录（保留旧的）
-      - name: Copy to gh-pages
+      # 复制新内容并生成列表
+      - name: Copy and generate index
         run: |
           # 如果 gh-pages 目录不存在，创建它
           mkdir -p gh-pages
@@ -81,12 +81,23 @@ jobs:
           # 切换到 gh-pages 目录生成列表
           cd gh-pages
           
-          # 收集所有历史文件夹（最多保留30个）
-          dirs=$(ls -td */ 2>/dev/null | head -30)
-          
-          # 生成 index.html
-          cat > index.html << 'EOF'
-<!DOCTYPE html>
+          # 使用 Python 生成 index.html
+          python3 << 'PYEOF'
+import os
+import glob
+
+# 收集所有文件夹（按修改时间倒序，最多30个）
+dirs = []
+for d in glob.glob('*/'):
+    if os.path.isfile(os.path.join(d, 'index.html')):
+        dirs.append(d.rstrip('/'))
+
+# 按时间倒序
+dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+dirs = dirs[:30]
+
+# 生成 HTML
+html = '''<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -103,21 +114,21 @@ a:hover { text-decoration: underline; }
 <body>
 <h1>AutoResearcher - 网站列表</h1>
 <ul>
-EOF
-          
-          # 添加所有文件夹链接（按时间倒序）
-          for dir in $dirs; do
-            if [ -f "${dir}index.html" ]; then
-              name=$(basename "$dir")
-              echo "<li><a href=\"${name}/index.html\">${name}</a></li>" >> index.html
-            fi
-          done
-          
-          cat >> index.html << 'EOF'
-</ul>
+'''
+
+for d in dirs:
+    html += f'<li><a href="{d}/index.html">{d}</a></li>\n'
+
+html += '''</ul>
 </body>
 </html>
-EOF
+'''
+
+with open('index.html', 'w') as f:
+    f.write(html)
+
+print(f"Generated index with {len(dirs)} entries")
+PYEOF
       
       # 部署到 GitHub Pages
       - name: Deploy to GitHub Pages
