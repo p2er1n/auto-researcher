@@ -1,28 +1,53 @@
 # 采集任务配置
 tasks:
-  - name: "arXiv论文"
+  - name: "学术论文汇总"
     interval: "6h"
     
     # 数据源配置
     sources:
-      # arXiv RSS 订阅
+      # 1. arXiv RSS 订阅 (计算机科学)
       - type: "arxiv_rss"
-        name: "AI最新论文"
+        name: "arXiv CS最新论文"
         url: "https://arxiv.org"
         auth:
           categories:
+            - "cs.AI"
+            - "cs.LG"
+            - "cs.CL"
+            - "cs.CV"
             - "cs.RO"
-          max_results: 20
+          max_results: 10
           feed_type: "rss"
+      
+      # 2. PubMed (生物医学)
+      - type: "pubmed"
+        name: "PubMed生物医学"
+        url: "https://pubmed.ncbi.nlm.nih.gov"
+        auth:
+          # 搜索词
+          term: "artificial intelligence[Title/Abstract] OR machine learning[Title/Abstract]"
+          # 数据库: pubmed 或 pmc
+          db: "pubmed"
+          # 排序: pub_date 或 relevance
+          sort: "pub_date"
+          max_results: 10
+      
+      # 3. Semantic Scholar (通用学术搜索)
+      - type: "semantic_scholar"
+        name: "Semantic Scholar学术搜索"
+        url: "https://www.semanticscholar.org"
+        auth:
+          query: "large language model"
+          max_results: 10
     
     # 筛选规则
     filters:
-      # 关键词筛选 - VLA (大小写敏感)
+      # 关键词筛选
       - type: "keyword"
-        keywords: ["VLA"]
+        keywords: ["AI", "machine learning", "deep learning", "VLA", "LLM", "transformer"]
         action: "keep"
         scope: "all"
-        case_sensitive: true
+        case_sensitive: false
       
       # 长度筛选
       - type: "length"
@@ -34,11 +59,11 @@ tasks:
     
     # 模板配置
     template: "default"
-    output: "arxiv-vla"
+    output: "academic-papers"
     
     variables:
-      site_title: "arXiv VLA 论文"
-      site_description: "自动追踪 arXiv 上的 VLA (Vision-Language-Action) 最新论文"
+      site_title: "学术论文汇总"
+      site_description: "自动追踪 arXiv、PubMed、Semantic Scholar 最新学术论文"
 
 # 全局设置
 settings:
@@ -48,7 +73,5 @@ settings:
   retry: 3
   user_agent: "AutoResearcher/1.0 (GitHub Actions)"
 
-# GitHub Pages 部署配置
-github:
-  branch: "gh-pages"
-  dir: "dists/latest"
+# GitHub 配置
+# github: null
