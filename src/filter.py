@@ -4,7 +4,7 @@
 """
 
 import re
-from typing import List
+from typing import List, Tuple
 from dataclasses import dataclass, field
 
 from loguru import logger
@@ -23,9 +23,17 @@ class ContentFilter:
     def filter(self, items: List[FetchedItem]) -> List[FetchedItem]:
         """执行所有筛选规则"""
         filtered = items
+
+        # 自动时间过滤：始终与 task.interval 同步（无需单独配置 date 过滤器）
+        interval_hours, interval_days = self._interval_to_window(self.task.interval)
+        auto_date_filter = FilterConfig(type="date", hours=interval_hours, days=interval_days, action="keep")
+        filtered = self._filter_date(filtered, auto_date_filter)
         
         for filter_config in self.filters:
             filter_type = filter_config.type
+            # date 过滤器由 interval 自动处理，避免重复配置
+            if filter_type == "date":
+                continue
             
             if filter_type == "regex":
                 filtered = self._filter_regex(filtered, filter_config)
@@ -41,6 +49,29 @@ class ContentFilter:
                 logger.warning(f"未知的筛选类型: {filter_type}")
         
         return filtered
+
+    def _interval_to_window(self, interval: str) -> Tuple[int, int]:
+        """把 task.interval (如 6h/1d/30m) 转成 date 过滤窗口 (hours, days)"""
+        if not interval:
+            return 24, 0
+
+        m = re.match(r"^\s*(\d+)\s*([mhd])\s*$", str(interval).lower())
+        if not m:
+            logger.warning(f"无法解析 interval={interval}，默认按 24 小时过滤")
+            return 24, 0
+
+        value = int(m.group(1))
+        unit = m.group(2)
+
+        if unit == "m":
+            # 分钟向上取整到小时，至少 1 小时
+            return max(1, (value + 59) // 60), 0
+        if unit == "h":
+            return max(1, value), 0
+        if unit == "d":
+            return 0, max(1, value)
+
+        return 24, 0
     
     def _filter_regex(self, items: List[FetchedItem], config: FilterConfig) -> List[FetchedItem]:
         """正则表达式筛选"""

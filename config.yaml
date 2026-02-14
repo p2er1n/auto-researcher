@@ -59,11 +59,6 @@ tasks:
     
     # 筛选规则
     filters:
-      # 时间过滤 - 与触发间隔同步（6小时），只保留最近6小时内的论文
-      - type: "date"
-        hours: 6
-        action: "keep"
-      
       # 关键词 - 具身智能/VLA方向
       - type: "keyword"
         keywords: [
