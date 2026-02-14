@@ -38,8 +38,9 @@ class FilterConfig:
     scope: str = "all"  # "all"(全部), "title"(仅标题), "abstract"(仅摘要), "title_only"(仅标题), "content_only"(仅内容)
     # 新增: 大小写敏感
     case_sensitive: bool = False
-    # 新增: 日期过滤天数
+    # 新增: 日期过滤（支持小时和天）
     days: Optional[int] = None
+    hours: Optional[int] = None  # 新增：支持按小时过滤
 
 
 @dataclass

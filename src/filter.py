@@ -176,13 +176,21 @@ class ContentFilter:
         return filtered
     
     def _filter_date(self, items: List[FetchedItem], config: FilterConfig) -> List[FetchedItem]:
-        """日期筛选 - 只保留最近 N 天的论文"""
-        if not config.days or config.days <= 0:
+        """日期筛选 - 只保留最近 N 天/小时的论文"""
+        # 支持 days 或 hours
+        days = config.days or 0
+        hours = config.hours or 0
+        
+        if days == 0 and hours == 0:
             return items
         
         from datetime import datetime, timedelta
         
-        cutoff_date = datetime.now() - timedelta(days=config.days)
+        # 计算截止时间
+        if hours > 0:
+            cutoff_date = datetime.now() - timedelta(hours=hours)
+        else:
+            cutoff_date = datetime.now() - timedelta(days=days)
         
         filtered = []
         
@@ -219,6 +227,6 @@ class ContentFilter:
             else:
                 logger.debug(f"论文日期过旧 ({item.date})，已过滤: {item.title[:50]}")
         
-        logger.info(f"日期过滤: {len(items)} -> {len(filtered)} (保留 {config.days} 天内)")
+        logger.info(f"日期过滤: {len(items)} -> {len(filtered)} (保留 {hours if hours > 0 else days} {'小时' if hours > 0 else '天'}内)")
         
         return filtered
