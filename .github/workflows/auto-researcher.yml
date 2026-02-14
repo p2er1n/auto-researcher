@@ -39,6 +39,15 @@ jobs:
         with:
           persist-credentials: false
       
+      # 检出 gh-pages 分支（如果存在）
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+          persist-credentials: false
+        continue-on-error: true
+      
       # 设置 Python
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -60,12 +69,54 @@ jobs:
         run: |
           python src/main.py --config config.yaml --output dists
       
+      # 复制新内容到 gh-pages 目录（不删除旧的）
+      - name: Copy to gh-pages
+        run: |
+          # 创建 gh-pages 目录结构（如果不存在）
+          mkdir -p gh-pages
+          
+          # 复制新生成的内容
+          cp -r dists/* gh-pages/ 2>/dev/null || true
+          
+          # 更新网站列表 index.html
+          cd gh-pages
+          # 生成网站列表
+          echo '<!DOCTYPE html>
+          <html>
+          <head>
+          <meta charset="utf-8">
+          <title>AutoResearcher - 网站列表</title>
+          <style>
+          body { font-family: system-ui; max-width: 800px; margin: 50px auto; padding: 20px; }
+          h1 { color: #333; }
+          ul { list-style: none; padding: 0; }
+          li { padding: 10px; margin: 5px 0; background: #f5f5f5; border-radius: 4px; }
+          a { color: #0066cc; text-decoration: none; }
+          a:hover { text-decoration: underline; }
+          </style>
+          </head>
+          <body>
+          <h1>AutoResearcher - 网站列表</h1>
+          <ul>' > index.html
+          
+          # 按时间倒序列出所有文件夹
+          for dir in $(ls -td */ 2>/dev/null | head -20); do
+            if [ -f "${dir}index.html" ]; then
+              name=$(basename "$dir")
+              echo "<li><a href=\"${name}/index.html\">${name}</a></li>" >> index.html
+            fi
+          done
+          
+          echo '</ul>
+          </body>
+          </html>' >> index.html
+      
       # 部署到 GitHub Pages
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ github.token }}
-          publish_dir: ./dists
+          publish_dir: ./gh-pages
           publish_branch: gh-pages
           user_name: AutoResearcher
           user_email: bot@autoreseacher.dev
