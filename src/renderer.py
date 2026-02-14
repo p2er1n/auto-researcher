@@ -40,7 +40,7 @@ class TemplateRenderer:
     def render(self, items: List[FetchedItem]) -> Path:
         """渲染模板生成网站"""
         # 生成输出目录 (带时间戳)
-        timestamp = datetime.now().strftime("%Y-%m-%d-%H")
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         dist_dir = self.output_dir / timestamp
         dist_dir.mkdir(parents=True, exist_ok=True)
         
