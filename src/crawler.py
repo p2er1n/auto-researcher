@@ -783,9 +783,27 @@ class Crawler:
                         elif "dblp.org/rec/" in href:
                             paper_url = href
                     
-                    # 提取年份
-                    year_elem = paper.find("span", class_="year")
-                    year = year_elem.get_text(strip=True) if year_elem else ""
+                    # 提取年份 - 从 meta 标签或 URL 中获取
+                    year = ""
+                    # 方式1: 从 meta 标签获取
+                    year_elem = paper.find("meta", itemprop="datePublished")
+                    if year_elem and year_elem.get("content"):
+                        year = year_elem.get("content")
+                    
+                    # 方式2: 如果没有，从 URL 中提取
+                    if not year and paper_url:
+                        # URL 格式: /rec/conf/icml/xxx25.html -> 提取 25 或 2025
+                        import re
+                        match = re.search(r'(\d{4})|(\d{2})(?=\.html|$)', paper_url)
+                        if match:
+                            y = match.group()
+                            year = "20" + y if len(y) == 2 else y
+                    
+                    # 方式3: 从会议 URL 中提取年份
+                    if not year and conf_url:
+                        match = re.search(r'(20\d{2})', conf_url)
+                        if match:
+                            year = match.group(1)
                     
                     if title:
                         items.append(FetchedItem(
