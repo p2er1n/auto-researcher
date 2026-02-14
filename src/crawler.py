@@ -56,6 +56,8 @@ class Crawler:
                     data = self._fetch_arxiv(source)
                 elif source.type == "arxiv_rss":
                     data = self._fetch_arxiv_rss(source)
+                elif source.type == "arxiv_lib":
+                    data = self._fetch_arxiv_lib(source)
                 elif source.type == "acl_anthology":
                     data = self._fetch_acl_anthology(source)
                 elif source.type == "semantic_scholar":
@@ -282,6 +284,62 @@ class Crawler:
                     "raw": str(entry)
                 }
             ))
+        
+        return items
+    
+    def _fetch_arxiv_lib(self, source: SourceConfig) -> List[FetchedItem]:
+        """使用 arxiv Python 库获取论文
+        
+        这个库在 GitHub Actions 环境中更稳定
+        """
+        import arxiv
+        
+        categories = source.auth.get("categories", []) if source.auth else []
+        max_results = source.auth.get("max_results", 10) if source.auth else 10
+        
+        if not categories:
+            logger.warning("arXiv 需要指定分类")
+            return []
+        
+        items = []
+        
+        # 构建查询: cat:cs.CV OR cat:cs.AI OR ...
+        query_parts = [f"cat:{cat}" for cat in categories]
+        query = " OR ".join(query_parts)
+        
+        logger.info(f"使用 arxiv 库查询: {query}")
+        
+        try:
+            client = arxiv.Client()
+            search = arxiv.Search(
+                query=query,
+                max_results=max_results,
+                sort_by=arxiv.SortCriterion.SubmittedDate
+            )
+            
+            for result in client.results(search):
+                # 提取 arXiv ID
+                arxiv_id = result.entry_id.split("/")[-1] if result.entry_id else None
+                
+                items.append(FetchedItem(
+                    source=source.name,
+                    title=f"[{arxiv_id}] {result.title}" if arxiv_id else result.title,
+                    content=result.summary,
+                    url=result.entry_id,
+                    date=result.published.isoformat() if result.published else None,
+                    authors=[author.name for author in result.authors],
+                    abstract=result.summary,
+                    categories=list(result.categories),
+                    metadata={
+                        "arxiv_id": arxiv_id,
+                        "source": "arxiv_lib"
+                    }
+                ))
+            
+            logger.info(f"使用 arxiv 库获取到 {len(items)} 篇论文")
+            
+        except Exception as e:
+            logger.error(f"使用 arxiv 库获取失败: {e}")
         
         return items
     

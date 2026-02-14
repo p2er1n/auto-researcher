@@ -40,9 +40,9 @@ tasks:
             - "cs.RO"
           max_results: 10
       
-      # arXiv API (备用)
-      - type: "arxiv"
-        name: "arXiv API"
+      # arXiv 库 (使用 Python arxiv 库，更稳定)
+      - type: "arxiv_lib"
+        name: "arXiv Library"
         url: "https://arxiv.org"
         auth:
           categories:
@@ -51,8 +51,6 @@ tasks:
             - "cs.LG"
             - "cs.RO"
           max_results: 15
-          sort_by: "submittedDate"
-          sort_order: "descending"
     
     # 筛选规则
     filters:

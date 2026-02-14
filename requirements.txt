@@ -8,6 +8,9 @@ lxml>=4.9.0
 # API 请求
 httpx>=0.25.0
 
+# arXiv 论文获取
+arxiv>=2.1.0
+
 # 数据处理
 pyyaml>=6.0
 python-dateutil>=2.8.0
