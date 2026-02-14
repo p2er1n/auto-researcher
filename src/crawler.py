@@ -649,70 +649,59 @@ class Crawler:
         """从 DBLP 获取最新会议论文
         
         工作流程:
-        1. 从 DBLP 获取指定会议的最新论文页面
-        2. 解析 HTML 页面获取论文列表
+        1. 从 RSS feed 获取最新会议/期刊列表
+        2. 匹配目标会议，获取其详情页链接
+        3. 解析详情页获取论文列表
         """
         items = []
         
-        for conf in conferences:
-            logger.info(f"获取 DBLP 会议论文: {conf}")
+        # 1. 先从 RSS feed 获取会议列表
+        rss_url = "https://dblp.org/feed/"
+        logger.info("获取 DBLP RSS 源")
+        
+        try:
+            response = self.session.get(rss_url, timeout=self.config.settings.timeout)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "xml")
+            channel = soup.find("channel")
+            if not channel:
+                logger.warning("无法解析 DBLP RSS")
+                return items
+        except Exception as e:
+            logger.error(f"获取 DBLP RSS 失败: {e}")
+            return items
+        
+        # 2. 从 RSS 中提取匹配的会议链接
+        conf_urls = {}  # conf_name -> url
+        for item in channel.find_all("item"):
+            title_elem = item.find("title")
+            link_elem = item.find("link")
+            if not title_elem or not link_elem:
+                continue
+            
+            title = title_elem.get_text(strip=True)
+            link = link_elem.get_text(strip=True)
+            
+            # 检查是否匹配目标会议
+            for conf in conferences:
+                if conf.lower() in title.lower():
+                    conf_urls[conf.upper()] = link
+                    logger.info(f"从 RSS 匹配到会议: {title} -> {link}")
+                    break
+        
+        # 3. 解析每个会议的详情页
+        for conf_name, conf_url in conf_urls.items():
+            logger.info(f"解析会议论文: {conf_name} from {conf_url}")
             
             try:
-                # 访问会议索引页面，获取最新会议列表
-                # 新版 DBLP URL: https://dblp.org/db/conf/{acronym}/index.html
-                conf_index_url = f"https://dblp.org/db/conf/{conf}/index.html"
-                response = self.session.get(conf_index_url, timeout=self.config.settings.timeout)
-                
-                if response.status_code != 200:
-                    logger.warning(f"DBLP 会议页面不存在: {conf_index_url}")
-                    continue
-                
-                soup = BeautifulSoup(response.text, "lxml")
-                
-                # 查找最新会议的链接
-                # 链接格式如: cvpr2025.html, cvpr2024.html
-                conf_links = []
-                for link in soup.find_all("a", href=True):
-                    href = link.get("href", "")
-                    # 匹配如 cvpr2025.html, iccv2025.html 等
-                    # 需要包含完整路径如 /db/conf/cvpr/cvpr2025.html
-                    if f"/{conf}" in href and href.endswith(".html"):
-                        # 提取年份
-                        import re
-                        match = re.search(rf'{conf}(\d{{4}})\.html', href)
-                        if match:
-                            year = match.group(1)
-                            conf_links.append((href, year))
-                
-                if not conf_links:
-                    logger.warning(f"未找到 {conf} 的会议论文页面")
-                    continue
-                
-                # 按年份排序，取最新的
-                conf_links.sort(key=lambda x: x[1], reverse=True)
-                
-                # 获取最新的会议
-                href, year = conf_links[0]
-                # href 可能是完整 URL 或相对路径
-                if href.startswith("http"):
-                    conf_url = href
-                else:
-                    conf_url = f"https://dblp.org{href}"
-                logger.info(f"解析会议论文: {conf_url}")
-                
-                # 获取会议论文页面
                 conf_response = self.session.get(conf_url, timeout=self.config.settings.timeout)
                 if conf_response.status_code != 200:
-                    logger.warning(f"无法获取会议论文页面: {conf_url}")
                     continue
                 
                 conf_soup = BeautifulSoup(conf_response.text, "lxml")
                 
-                # 解析论文列表
-                # DBLP 论文页面结构: 在 <ul class="publ-list"> 下的 <li> 元素中
+                # 查找论文列表 - 新版 DBLP 使用 li.entry
                 paper_count = 0
-                
-                # 查找所有论文条目
                 for paper in conf_soup.find_all("li", class_="entry"):
                     if paper_count >= max_results:
                         break
@@ -730,42 +719,42 @@ class Crawler:
                         if author_name:
                             authors.append(author_name)
                     
-                    # 提取链接 - 优先选择 PDF 或 DBLP 详情页
+                    # 提取链接
                     paper_url = None
                     for link in paper.find_all("a", href=True):
-                        href_link = link.get("href", "")
-                        if href_link.endswith(".pdf"):
-                            paper_url = href_link
+                        href = link.get("href", "")
+                        if href.endswith(".pdf"):
+                            paper_url = href
                             break
-                        elif "dblp.org/rec/" in href_link:
-                            paper_url = href_link
+                        elif "dblp.org/rec/" in href:
+                            paper_url = href
                     
                     # 提取年份
                     year_elem = paper.find("span", class_="year")
-                    paper_year = year if not year_elem else year_elem.get_text(strip=True)
+                    year = year_elem.get_text(strip=True) if year_elem else ""
                     
                     if title:
                         items.append(FetchedItem(
-                            source=f"DBLP RSS/{conf.upper()}",
+                            source=f"DBLP RSS/{conf_name}",
                             title=title,
-                            content=f"{conf.upper()} {paper_year}",
+                            content=f"{conf_name} {year}",
                             url=paper_url,
-                            date=paper_year,
+                            date=year,
                             authors=authors,
-                            abstract=f"{title}",
-                            categories=[conf.upper()],
+                            abstract=title,
+                            categories=[conf_name],
                             metadata={
                                 "source": "dblp_rss",
-                                "venue": conf.upper(),
-                                "year": paper_year
+                                "venue": conf_name,
+                                "year": year
                             }
                         ))
                         paper_count += 1
                 
-                logger.info(f"从 {conf.upper()}{year} 获取到 {paper_count} 篇论文")
-                    
+                logger.info(f"从 {conf_name} 获取到 {paper_count} 篇论文")
+                
             except Exception as e:
-                logger.error(f"获取 DBLP {conf} 失败: {e}")
+                logger.error(f"解析 {conf_name} 失败: {e}")
                 continue
         
         # 去重并限制数量
