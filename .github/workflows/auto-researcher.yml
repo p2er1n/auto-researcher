@@ -60,6 +60,12 @@ jobs:
         run: |
           python src/main.py --config config.yaml --output dists
       
+      # 保存 dists 内容到临时目录
+      - name: Save dists
+        run: |
+          mkdir -p /tmp/dists
+          cp -r dists/* /tmp/dists/ || true
+      
       # 配置 Git 用户
       - name: Configure Git
         run: |
@@ -78,11 +84,11 @@ jobs:
           # 保留 .git 目录，其他全部删除
           find . -maxdepth 1 ! -name '.git*' ! -name '.' -exec rm -rf {} + 2>/dev/null || true
       
-      # 复制新生成的内容
-      - name: Copy new content
+      # 从临时目录恢复 dists 内容
+      - name: Restore dists
         run: |
-          cp -r dists/* .
-          rm -rf dists
+          cp -r /tmp/dists/* . || true
+          rm -rf /tmp/dists
       
       # 提交并推送
       - name: Commit and Push
