@@ -227,6 +227,7 @@ class Crawler:
         response.raise_for_status()
         
         # 解析 XML 响应
+        logger.info(f"arXiv API 响应长度: {len(response.text)}")
         soup = BeautifulSoup(response.text, "xml")
         entries = soup.find_all("entry")
         
