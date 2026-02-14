@@ -191,9 +191,7 @@ class Crawler:
         categories = source.auth.get("categories", []) if source.auth else []
         
         # 构建查询
-        query_parts = [search_query]
-        
-        # 如果有多个类别，用 OR 连接，然后与 search_query 用 AND 连接
+        # 如果有多个类别，用 OR 连接；如果没有类别，则只使用 search_query
         if categories:
             cat_queries = []
             for cat in categories:
@@ -202,10 +200,16 @@ class Crawler:
                 else:
                     cat_queries.append(f"cat:{cat}")
             
-            categories_query = "+OR+".join(cat_queries)
-            query_parts.append(categories_query)
-        
-        query = "+AND+".join(query_parts)
+            if search_query and search_query != "all":
+                # 如果有额外的搜索查询，与类别用 AND 连接
+                categories_query = "+OR+".join(cat_queries)
+                query = f"{search_query}+AND+({categories_query})"
+            else:
+                # 只搜索类别
+                query = "+OR+".join(cat_queries)
+        else:
+            # 只使用搜索查询
+            query = search_query
         
         # 构建 API URL
         base_url = "https://export.arxiv.org/api/query"
