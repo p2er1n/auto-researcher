@@ -87,6 +87,27 @@
             color: #333;
         }
         
+        .config-info .source-stats {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        
+        .config-info .source-stats strong {
+            color: #333;
+        }
+        
+        .config-info .stat-tag {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            margin-right: 8px;
+            display: inline-block;
+            margin-top: 5px;
+        }
+        
         .items {
             display: grid;
             gap: 20px;
@@ -229,14 +250,29 @@
             <div class="source-list">
                 <strong>数据源:</strong>
                 {% if task.sources %}
+                    {% set seen = [] %}
                     {% for source in task.sources %}
-                    <span class="source-tag">{{ source.name }}</span>
+                        {% if source.name and source.name.split()[0] not in seen %}
+                        <span class="source-tag">{{ source.name.split()[0] }}</span>
+                        {% endif %}
+                        {% set _ = seen.append(source.name.split()[0]) %}
                     {% endfor %}
                 {% else %}
                     <span class="source-tag">arXiv</span>
                     <span class="source-tag">DBLP</span>
                 {% endif %}
             </div>
+            
+            {# 来源统计 #}
+            {% if source_stats %}
+            <div class="source-stats">
+                <strong>📊 来源统计:</strong>
+                {% for source, count in source_stats.items() %}
+                <span class="stat-tag">{{ source }}: {{ count }} 篇</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
             <div class="filter-list">
                 <strong>关键词过滤:</strong>
                 {% if task.filters %}

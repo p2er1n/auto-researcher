@@ -47,12 +47,22 @@ class TemplateRenderer:
         
         logger.info(f"渲染网站到: {dist_dir}")
         
+        # 计算来源统计
+        source_stats = {}
+        for item in items:
+            info = self._get_source_info(item)
+            source = info["type"]
+            if source not in source_stats:
+                source_stats[source] = 0
+            source_stats[source] += 1
+        
         # 准备数据
         data = {
             "task": self.task,
             "items": items,
             "generated_at": datetime.now().isoformat(),
             "timestamp": timestamp,
+            "source_stats": source_stats,
             **self.task.variables
         }
         
@@ -181,24 +191,19 @@ class TemplateRenderer:
         source = item.source if hasattr(item, 'source') else str(item)
         metadata = item.metadata if hasattr(item, 'metadata') else {}
         
-        # 判断来源类型
+        # 判断来源类型 - 只显示大类别
         source_type = "未知"
         venue = None
         
         # 不显示的 venue (不是真正的会议/期刊)
         invalid_venues = ["CoRR", "corr", "arxiv"]
         
-        # 从 source 字符串解析
+        # 从 source 字符串解析 - 只显示大类别
         if "arxiv" in source.lower():
-            source_type = "arXiv RSS"
-            # arXiv 论文不显示 venue (除非有明确的会议信息)
+            source_type = "arXiv"  # 简化：只显示 arXiv
             venue = None
         elif "dblp" in source.lower():
-            # 判断是 API 还是 RSS
-            if metadata.get("source") == "dblp_rss":
-                source_type = "DBLP RSS"
-            else:
-                source_type = "DBLP API"
+            source_type = "DBLP"  # 简化：只显示 DBLP
             
             # 获取会议/期刊信息
             venue = metadata.get("venue")
@@ -212,6 +217,10 @@ class TemplateRenderer:
             if venue and venue.lower() in invalid_venues:
                 venue = None
         elif "acl" in source.lower() or "anthology" in source.lower():
+            source_type = "ACL Anthology"
+            venue = metadata.get("conference")
+            if venue and venue.lower() in invalid_venues:
+                venue = None
             source_type = "ACL Anthology"
             venue = metadata.get("conference")
             # 过滤无效 venue
