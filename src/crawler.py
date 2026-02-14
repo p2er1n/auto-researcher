@@ -693,7 +693,11 @@ class Crawler:
                 
                 # 获取最新的会议
                 href, year = conf_links[0]
-                conf_url = f"https://dblp.org{href}"
+                # href 可能是完整 URL 或相对路径
+                if href.startswith("http"):
+                    conf_url = href
+                else:
+                    conf_url = f"https://dblp.org{href}"
                 logger.info(f"解析会议论文: {conf_url}")
                 
                 # 获取会议论文页面
