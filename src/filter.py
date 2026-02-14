@@ -201,16 +201,24 @@ class ContentFilter:
             # 尝试从各种字段获取日期
             if item.date:
                 # 尝试多种日期格式
+                date_str = str(item.date).strip()
+                # 移除时区信息（+00:00 等）
+                if '+' in date_str:
+                    date_str = date_str.split('+')[0]
+                elif 'Z' in date_str:
+                    date_str = date_str.replace('Z', '')
+                
                 date_formats = [
                     "%Y-%m-%d",
                     "%Y-%m-%dT%H:%M:%S",
                     "%Y-%m-%d %H:%M:%S",
+                    "%Y-%m-%dT%H:%M:%S.%f",
                     "%d %b %Y",
                     "%Y",
                 ]
                 for fmt in date_formats:
                     try:
-                        item_date = datetime.strptime(str(item.date).strip(), fmt)
+                        item_date = datetime.strptime(date_str, fmt)
                         break
                     except:
                         continue
