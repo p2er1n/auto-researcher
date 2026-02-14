@@ -1,14 +1,11 @@
 name: AutoResearcher
 
 on:
-  # 定时执行 (每6小时)
   schedule:
     - cron: '0 */6 * * *'
   
-  # 手动触发
   workflow_dispatch:
   
-  # 代码推送时触发
   push:
     branches:
       - master
@@ -17,13 +14,11 @@ on:
       - 'src/**'
       - 'templates/**'
 
-# 设置 GITHUB_TOKEN 权限
 permissions:
   contents: write
   pages: write
   id-token: write
 
-# 允许并发执行
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -33,13 +28,11 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # 检出代码
       - name: Checkout
         uses: actions/checkout@v4
         with:
           persist-credentials: false
       
-      # 检出 gh-pages 分支（如果存在）
       - name: Checkout gh-pages
         uses: actions/checkout@v4
         with:
@@ -48,20 +41,17 @@ jobs:
           persist-credentials: false
         continue-on-error: true
       
-      # 设置 Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
       
-      # 安装依赖
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
-      # 执行采集和生成
       - name: Run AutoResearcher
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -69,68 +59,15 @@ jobs:
         run: |
           python src/main.py --config config.yaml --output dists
       
-      # 复制新内容并生成列表
       - name: Copy and generate index
         run: |
-          # 如果 gh-pages 目录不存在，创建它
           mkdir -p gh-pages
-          
-          # 复制新生成的内容到 gh-pages
           cp -r dists/* gh-pages/ 2>/dev/null || true
           
-          # 切换到 gh-pages 目录生成列表
-          cd gh-pages
-          
-          # 使用 Python 生成 index.html
-          python3 << 'PYEOF'
-import os
-import glob
-
-# 收集所有文件夹（按修改时间倒序，最多30个）
-dirs = []
-for d in glob.glob('*/'):
-    if os.path.isfile(os.path.join(d, 'index.html')):
-        dirs.append(d.rstrip('/'))
-
-# 按时间倒序
-dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-dirs = dirs[:30]
-
-# 生成 HTML
-html = '''<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>AutoResearcher - 网站列表</title>
-<style>
-body { font-family: system-ui; max-width: 800px; margin: 50px auto; padding: 20px; }
-h1 { color: #333; }
-ul { list-style: none; padding: 0; }
-li { padding: 10px; margin: 5px 0; background: #f5f5f5; border-radius: 4px; }
-a { color: #0066cc; text-decoration: none; }
-a:hover { text-decoration: underline; }
-</style>
-</head>
-<body>
-<h1>AutoResearcher - 网站列表</h1>
-<ul>
-'''
-
-for d in dirs:
-    html += f'<li><a href="{d}/index.html">{d}</a></li>\n'
-
-html += '''</ul>
-</body>
-</html>
-'''
-
-with open('index.html', 'w') as f:
-    f.write(html)
-
-print(f"Generated index with {len(dirs)} entries")
-PYEOF
+          # Decode and run index generator
+          echo "aW1wb3J0IG9zCmltcG9ydCBnbG9iCmltcG9ydCBzeXMKCm9zLmNoZGlyKHN5cy5hcmd2WzFdIGlmIGxlbihzeXMuYXJndikgPiAxIGVsc2UgIi4iKQoKZGlycyA9IFtdCmZvciBkIGluIGdsb2IuZ2xvYigiKi8iKToKICAgIGlmIG9zLnBhdGguaXNmaWxlKG9zLnBhdGguam9pbihkLCAiaW5kZXguaHRtbCIpKToKICAgICAgICBkaXJzLmFwcGVuZChkLnJzdHJpcCgiLyIpKQoKZGlycy5zb3J0KGtleT1sYW1iZGEgeDogb3MucGF0aC5nZXRtdGltZSh4KSwgcmV2ZXJzZT1UcnVlKQpkaXJzID0gZGlyc1s6MzBdCgpodG1sID0gIiIiPCFET0NUWVBFIGh0bWw+CjxodG1sPgo8aGVhZD4KPG1ldGEgY2hhcnNldD0idXRmLTgiPgo8dGl0bGU+QXV0b1Jlc2VhcmNoZXIgLSDnvZHnq5nliJfooag8L3RpdGxlPgo8c3R5bGU+CmJvZHkgeyBmb250LWZhbWlseTogc3lzdGVtLXVpOyBtYXgtd2lkdGg6IDgwMHB4OyBtYXJnaW46IDUwcHggYXV0bzsgcGFkZGluZzogMjBweDsgfQpoMSB7IGNvbG9yOiAjMzMzOyB9CnVsIHsgbGlzdC1zdHlsZTogbm9uZTsgcGFkZGluZzogMDsgfQpsaSB7IHBhZGRpbmc6IDEwcHg7IG1hcmdpbjogNXB4IDA7IGJhY2tncm91bmQ6ICNmNWY1ZjU7IGJvcmRlci1yYWRpdXM6IDRweDsgfQphIHsgY29sb3I6ICMwMDY2Y2M7IHRleHQtZGVjb3JhdGlvbjogbm9uZTsgfQphOmhvdmVyIHsgdGV4dC1kZWNvcmF0aW9uOiB1bmRlcmxpbmU7IH0KPC9zdHlsZT4KPC9oZWFkPgo8Ym9keT4KPGgxPkF1dG9SZXNlYXJjaGVyIC0g572R56uZ5YiX6KGoPC9oMT4KPHVsPgoiIiIKCmZvciBkIGluIGRpcnM6CiAgICBodG1sICs9ICI8bGk+PGEgaHJlZj1cIiIgKyBkICsgIi9pbmRleC5odG1sXCI+IiArIGQgKyAiPC9hPjwvbGk+XG4iCgpodG1sICs9ICIiIjwvdWw+CjwvYm9keT4KPC9odG1sPgoiIiIKCndpdGggb3BlbigiaW5kZXguaHRtbCIsICJ3IikgYXMgZjoKICAgIGYud3JpdGUoaHRtbCkKCnByaW50KCJHZW5lcmF0ZWQgaW5kZXggd2l0aCAiICsgc3RyKGxlbihkaXJzKSkgKyAiIGVudHJpZXMiKQ==" | base64 -d > /tmp/gen_index.py
+          python3 /tmp/gen_index.py gh-pages
       
-      # 部署到 GitHub Pages
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
