@@ -47,14 +47,32 @@ class TemplateRenderer:
         
         logger.info(f"渲染网站到: {dist_dir}")
         
-        # 计算来源统计
+        # 计算来源统计 - 按子类别统计
         source_stats = {}
         for item in items:
-            info = self._get_source_info(item)
-            source = info["type"]
-            if source not in source_stats:
-                source_stats[source] = 0
-            source_stats[source] += 1
+            source = item.source if hasattr(item, 'source') else str(item)
+            metadata = item.metadata if hasattr(item, 'metadata') else {}
+            
+            # 获取子类别名称
+            sub_category = source  # 完整来源名
+            
+            # 简化显示名称
+            if "arxiv" in source.lower():
+                if metadata.get("source") == "arxiv_lib":
+                    sub_category = "arXiv Library"
+                elif "rss" in source.lower():
+                    sub_category = "arXiv RSS"
+                else:
+                    sub_category = "arXiv"
+            elif "dblp" in source.lower():
+                if metadata.get("source") == "dblp_rss":
+                    sub_category = "DBLP RSS"
+                else:
+                    sub_category = "DBLP API"
+            
+            if sub_category not in source_stats:
+                source_stats[sub_category] = 0
+            source_stats[sub_category] += 1
         
         # 准备数据
         data = {
