@@ -28,9 +28,21 @@ tasks:
           query: "vision language action"
           max_results: 10
       
-      # arXiv API
+      # arXiv RSS (每天更新一次)
+      - type: "arxiv_rss"
+        name: "arXiv RSS"
+        url: "https://rss.arxiv.org"
+        auth:
+          categories:
+            - "cs.CV"
+            - "cs.AI"
+            - "cs.LG"
+            - "cs.RO"
+          max_results: 10
+      
+      # arXiv API (备用)
       - type: "arxiv"
-        name: "arXiv AI/ML/CV论文"
+        name: "arXiv API"
         url: "https://arxiv.org"
         auth:
           categories:

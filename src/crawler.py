@@ -286,15 +286,15 @@ class Crawler:
         return items
     
     def _fetch_arxiv_rss(self, source: SourceConfig) -> List[FetchedItem]:
-        """从 arXiv RSS/Atom 获取最新论文"""
-        from datetime import datetime
+        """从 arXiv RSS/Atom 获取最新论文
+        
+        使用 rss.arxiv.org 获取每日更新的论文列表
+        """
         import warnings
         from bs4 import XMLParsedAsHTMLWarning
         
-        # 忽略 XML 警告
         warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
         
-        # 获取分类列表
         categories = source.auth.get("categories", []) if source.auth else []
         
         if not categories:
@@ -303,108 +303,105 @@ class Crawler:
         
         items = []
         
-        for cat in categories:
-            # 构建 RSS/Atom URL
-            # 支持 rss 或 atom
-            feed_type = source.auth.get("feed_type", "rss") if source.auth else "rss"
+        # 使用 rss.arxiv.org (新版) + 号连接多分类
+        categories_str = "+".join(categories)
+        
+        # 尝试 RSS 格式
+        url = f"https://rss.arxiv.org/rss/{categories_str}"
+        logger.info(f"获取 arXiv RSS: {url}")
+        
+        try:
+            response = self.session.get(url, timeout=self.config.settings.timeout)
+            response.raise_for_status()
             
-            if feed_type == "atom":
-                url = f"http://export.arxiv.org/atom/{cat}"
-            else:
-                url = f"http://export.arxiv.org/rss/{cat}"
+            soup = BeautifulSoup(response.text, "xml")
             
-            logger.info(f"获取 arXiv RSS: {url}")
+            # 查找 item 元素
+            entries = soup.find_all("item")
             
-            try:
+            # 如果 RSS 没数据，尝试 ATOM
+            if not entries:
+                url = f"https://rss.arxiv.org/atom/{categories_str}"
+                logger.info(f"RSS 无数据，尝试 ATOM: {url}")
                 response = self.session.get(url, timeout=self.config.settings.timeout)
                 response.raise_for_status()
+                soup = BeautifulSoup(response.text, "xml")
+                entries = soup.find_all("entry")
+            
+            logger.info(f"arXiv RSS 返回 {len(entries)} 条")
+            
+            for entry in entries:
+                # 提取论文信息
+                title = entry.find("title")
+                title = title.get_text(strip=True).replace("\n", " ") if title else ""
                 
-                soup = BeautifulSoup(response.text, "lxml")
+                # 摘要
+                description = entry.find("description")
+                summary = entry.find("summary")
+                abstract = None
+                if description:
+                    abstract = description.get_text(strip=True).replace("\n", " ")
+                elif summary:
+                    abstract = summary.get_text(strip=True).replace("\n", " ")
                 
-                # 根据 feed 类型选择解析方式
-                entries = soup.find_all("item")
-                if not entries:
-                    entries = soup.find_all("entry")
+                # 作者
+                authors = []
+                author_tags = entry.find_all("author")
+                for author in author_tags:
+                    name = author.find("name")
+                    if name:
+                        authors.append(name.get_text(strip=True))
                 
-                for entry in entries:
-                    # 提取论文信息
-                    title = entry.find("title")
-                    title = title.get_text(strip=True).replace("\n", " ") if title else ""
-                    
-                    # 摘要
-                    description = entry.find("description")
-                    summary = entry.find("summary")
-                    abstract = None
-                    if description:
-                        abstract = description.get_text(strip=True).replace("\n", " ")
-                    elif summary:
-                        abstract = summary.get_text(strip=True).replace("\n", " ")
-                    
-                    # 作者
-                    authors = []
-                    author_tags = entry.find_all("author")
-                    for author in author_tags:
-                        name = author.find("name")
-                        if name:
-                            authors.append(name.get_text(strip=True))
-                    
-                    # 日期 - 尝试多种格式
-                    date = None
-                    
-                    # 方式1: pubDate
-                    pub_date = entry.find("pubDate")
-                    if pub_date:
-                        date_str = pub_date.get_text(strip=True)
-                        try:
-                            from email.utils import parsedate_to_datetime
-                            dt = parsedate_to_datetime(date_str)
-                            date = dt.isoformat()
-                        except:
-                            pass
-                    
-                    # 方式2: dc:date
-                    if not date:
-                        dc_date = entry.find("dc:date")
-                        if dc_date:
-                            date = dc_date.get_text(strip=True)
-                    
-                    # 方式3: published (Atom)
-                    if not date:
-                        published = entry.find("published")
-                        if published:
-                            date = published.get_text(strip=True)
-                    
-                    # 分类
-                    categories_list = []
-                    cat_tags = entry.find_all("category")
-                    for cat_tag in cat_tags:
-                        term = cat_tag.get_text(strip=True)
-                        if term:
-                            categories_list.append(term)
-                    
-                    # 获取链接
-                    link = entry.find("link")
-                    paper_url = None
-                    arxiv_id = None
-                    if link:
-                        paper_url = link.get_text(strip=True)
-                        if not paper_url:
-                            paper_url = link.get("href")
-                        # 从 URL 提取 arXiv ID
-                        if paper_url and "arxiv.org" in paper_url:
-                            arxiv_id = paper_url.split("/")[-1]
-                            if ".pdf" in arxiv_id:
-                                arxiv_id = arxiv_id.replace(".pdf", "")
-                    
-                    # 如果没有 PDF 链接，尝试构建
-                    if arxiv_id and not paper_url:
-                        paper_url = f"https://arxiv.org/abs/{arxiv_id}"
-                    
-                    # 论文标题加上 ID
-                    title = f"[{arxiv_id}] {title}" if arxiv_id else title
-                    
+                # 日期
+                date = None
+                pub_date = entry.find("pubDate")
+                if pub_date:
+                    date_str = pub_date.get_text(strip=True)
+                    try:
+                        from email.utils import parsedate_to_datetime
+                        dt = parsedate_to_datetime(date_str)
+                        date = dt.isoformat()
+                    except:
+                        pass
+                
+                if not date:
+                    published = entry.find("published")
+                    if published:
+                        date = published.get_text(strip=True)
+                
+                # 分类
+                categories_list = []
+                cat_tags = entry.find_all("category")
+                for cat_tag in cat_tags:
+                    term = cat_tag.get_text(strip=True)
+                    if term:
+                        categories_list.append(term)
+                
+                # 获取链接
+                link = entry.find("link")
+                paper_url = None
+                arxiv_id = None
+                if link:
+                    paper_url = link.get_text(strip=True)
+                    if not paper_url:
+                        paper_url = link.get("href")
+                
+                # 从 URL 提取 arXiv ID
+                if paper_url and "arxiv.org" in paper_url:
+                    arxiv_id = paper_url.split("/")[-1]
+                    if ".pdf" in arxiv_id:
+                        arxiv_id = arxiv_id.replace(".pdf", "")
+                
+                # 如果没有 PDF 链接，尝试构建
+                if arxiv_id and not paper_url:
+                    paper_url = f"https://arxiv.org/abs/{arxiv_id}"
+                
+                # 论文标题加上 ID
+                title = f"[{arxiv_id}] {title}" if arxiv_id else title
+                
+                if title:
                     items.append(FetchedItem(
-                        source=f"{source.name}/{cat}",
+                        source=source.name,
                         title=title,
                         content=abstract or "",
                         url=paper_url,
@@ -414,13 +411,12 @@ class Crawler:
                         categories=categories_list,
                         metadata={
                             "arxiv_id": arxiv_id,
-                            "category": cat,
+                            "source": "arxiv_rss"
                         }
                     ))
                     
-            except Exception as e:
-                logger.error(f"获取 {cat} RSS 失败: {e}")
-                continue
+        except Exception as e:
+            logger.error(f"获取 arXiv RSS 失败: {e}")
         
         # 按日期排序，最新的在前
         items.sort(key=lambda x: x.date or "", reverse=True)
