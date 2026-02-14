@@ -201,7 +201,7 @@ class Crawler:
         query = "+AND+".join(query_parts)
         
         # 构建 API URL
-        base_url = "http://export.arxiv.org/api/query"
+        base_url = "https://export.arxiv.org/api/query"
         params = {
             "search_query": query,
             "max_results": max_results,
