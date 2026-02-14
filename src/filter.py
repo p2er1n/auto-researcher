@@ -35,6 +35,8 @@ class ContentFilter:
                 filtered = self._filter_length(filtered, filter_config)
             elif filter_type == "deduplicate":
                 filtered = self._filter_deduplicate(filtered, filter_config)
+            elif filter_type == "date":
+                filtered = self._filter_date(filtered, filter_config)
             else:
                 logger.warning(f"未知的筛选类型: {filter_type}")
         
@@ -170,5 +172,53 @@ class ContentFilter:
             if key not in seen:
                 seen.add(key)
                 filtered.append(item)
+        
+        return filtered
+    
+    def _filter_date(self, items: List[FetchedItem], config: FilterConfig) -> List[FetchedItem]:
+        """日期筛选 - 只保留最近 N 天的论文"""
+        if not config.days or config.days <= 0:
+            return items
+        
+        from datetime import datetime, timedelta
+        
+        cutoff_date = datetime.now() - timedelta(days=config.days)
+        
+        filtered = []
+        
+        for item in items:
+            # 尝试解析日期
+            item_date = None
+            
+            # 尝试从各种字段获取日期
+            if item.date:
+                # 尝试多种日期格式
+                date_formats = [
+                    "%Y-%m-%d",
+                    "%Y-%m-%dT%H:%M:%S",
+                    "%Y-%m-%d %H:%M:%S",
+                    "%d %b %Y",
+                    "%Y",
+                ]
+                for fmt in date_formats:
+                    try:
+                        item_date = datetime.strptime(str(item.date).strip(), fmt)
+                        break
+                    except:
+                        continue
+            
+            # 如果没有日期，跳过过滤（保留）
+            if not item_date:
+                logger.debug(f"论文无日期信息，跳过日期过滤: {item.title[:50]}")
+                filtered.append(item)
+                continue
+            
+            # 检查是否在日期范围内
+            if item_date >= cutoff_date:
+                filtered.append(item)
+            else:
+                logger.debug(f"论文日期过旧 ({item.date})，已过滤: {item.title[:50]}")
+        
+        logger.info(f"日期过滤: {len(items)} -> {len(filtered)} (保留 {config.days} 天内)")
         
         return filtered

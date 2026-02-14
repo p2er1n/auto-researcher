@@ -26,7 +26,7 @@ class SourceConfig:
 @dataclass
 class FilterConfig:
     """筛选规则配置"""
-    type: str  # "regex", "keyword", "length", "deduplicate"
+    type: str  # "regex", "keyword", "length", "deduplicate", "date"
     pattern: Optional[str] = None
     action: str = "keep"
     keywords: Optional[List[str]] = None
@@ -38,6 +38,8 @@ class FilterConfig:
     scope: str = "all"  # "all"(全部), "title"(仅标题), "abstract"(仅摘要), "title_only"(仅标题), "content_only"(仅内容)
     # 新增: 大小写敏感
     case_sensitive: bool = False
+    # 新增: 日期过滤天数
+    days: Optional[int] = None
 
 
 @dataclass

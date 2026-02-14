@@ -21,7 +21,7 @@ tasks:
             - "iros"
             - "coRL"
             - "RSS"
-          max_results: 10
+          max_results: 100  # 不限制，由时间过滤
       
       # DBLP 搜索 (可选，补充搜索)
       - type: "dblp"
@@ -29,7 +29,7 @@ tasks:
         url: "https://dblp.org"
         auth:
           query: "embodied intelligence vision language action robot"
-          max_results: 10
+          max_results: 100
       
       # arXiv RSS (每天更新一次)
       - type: "arxiv_rss"
@@ -42,7 +42,7 @@ tasks:
             - "cs.LG"
             - "cs.RO"
             - "cs.CL"
-          max_results: 10
+          max_results: 100
       
       # arXiv 库 (使用 Python arxiv 库，更稳定)
       - type: "arxiv_lib"
@@ -55,17 +55,22 @@ tasks:
             - "cs.LG"
             - "cs.RO"
             - "cs.CL"
-          max_results: 15
+          max_results: 100
     
     # 筛选规则
     filters:
+      # 时间过滤 - 只保留最近 180 天（约半年）的论文
+      - type: "date"
+        days: 180
+        action: "keep"
+      
       # 关键词 - 具身智能/VLA方向
       - type: "keyword"
         keywords: [
           "VLA", "Vision-Language-Action", "Vision Language Action",
           "embodied", "embodied intelligence", "具身智能",
           "robot", "robotics", "robotic", "机器人",
-          "manipulation", "grasping", " dexterous manipulation",
+          "manipulation", "grasping", "dexterous manipulation",
           "navigation", "visual navigation", "language navigation",
           "humanoid", "android", "仿人机器人",
           "sim-to-real", "domain randomization", "sim2real",
@@ -81,6 +86,7 @@ tasks:
         action: "keep"
         scope: "all"
         case_sensitive: false
+        match: "any"
       
       # 长度筛选
       - type: "length"
