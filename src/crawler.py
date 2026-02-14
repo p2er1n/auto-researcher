@@ -216,7 +216,7 @@ class Crawler:
         response.raise_for_status()
         
         # 解析 XML 响应
-        soup = BeautifulSoup(response.text, "lxml")
+        soup = BeautifulSoup(response.text, "xml")
         entries = soup.find_all("entry")
         
         items = []
