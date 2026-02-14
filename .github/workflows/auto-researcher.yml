@@ -11,7 +11,7 @@ on:
   # 代码推送时触发
   push:
     branches:
-      - main
+      - master
     paths:
       - 'config.yaml'
       - 'src/**'
