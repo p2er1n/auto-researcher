@@ -185,12 +185,14 @@ class TemplateRenderer:
         source_type = "未知"
         venue = None
         
+        # 不显示的 venue (不是真正的会议/期刊)
+        invalid_venues = ["CoRR", "corr", "arxiv"]
+        
         # 从 source 字符串解析
         if "arxiv" in source.lower():
             source_type = "arXiv RSS"
-            # 从 metadata 获取分类
-            if metadata.get("category"):
-                pass  # arXiv 不需要显示分类
+            # arXiv 论文不显示 venue (除非有明确的会议信息)
+            venue = None
         elif "dblp" in source.lower():
             # 判断是 API 还是 RSS
             if metadata.get("source") == "dblp_rss":
@@ -205,9 +207,16 @@ class TemplateRenderer:
                 parts = source.split("/")
                 if len(parts) > 1:
                     venue = parts[-1]
+            
+            # 过滤无效 venue
+            if venue and venue.lower() in invalid_venues:
+                venue = None
         elif "acl" in source.lower() or "anthology" in source.lower():
             source_type = "ACL Anthology"
             venue = metadata.get("conference")
+            # 过滤无效 venue
+            if venue and venue.lower() in invalid_venues:
+                venue = None
         
         # 返回字典，方便模板使用
         return {
