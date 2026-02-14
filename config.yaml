@@ -28,7 +28,7 @@ tasks:
         name: "DBLP 具身智能搜索"
         url: "https://dblp.org"
         auth:
-          query: "embodied intelligence vision language action robot"
+          query: "vision language robot"
           max_results: 100
       
       # arXiv RSS (每天更新一次)
