@@ -1,0 +1,414 @@
+"""
+数据采集模块
+支持从 API 和网页采集数据
+"""
+
+import asyncio
+from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+
+import requests
+from bs4 import BeautifulSoup
+from loguru import logger
+
+from config import Config, TaskConfig, SourceConfig
+
+
+@dataclass
+class FetchedItem:
+    """采集到的单条数据"""
+    source: str
+    title: str
+    content: str
+    url: Optional[str] = None
+    date: Optional[str] = None
+    metadata: Dict[str, Any] = None
+    authors: Optional[List[str]] = None
+    abstract: Optional[str] = None
+    categories: Optional[List[str]] = None
+    
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
+
+
+class Crawler:
+    """数据采集器"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": config.settings.user_agent
+        })
+    
+    def fetch(self, task: TaskConfig) -> List[FetchedItem]:
+        """执行采集任务"""
+        all_data = []
+        
+        for source in task.sources:
+            try:
+                if source.type == "api":
+                    data = self._fetch_api(source)
+                elif source.type == "web":
+                    data = self._fetch_web(source)
+                elif source.type == "arxiv":
+                    data = self._fetch_arxiv(source)
+                elif source.type == "arxiv_rss":
+                    data = self._fetch_arxiv_rss(source)
+                else:
+                    logger.warning(f"未知数据源类型: {source.type}")
+                    continue
+                
+                all_data.extend(data)
+                logger.info(f"从 {source.name} 采集到 {len(data)} 条数据")
+                
+            except Exception as e:
+                logger.error(f"采集 {source.name} 失败: {e}")
+                continue
+        
+        return all_data
+    
+    def _fetch_api(self, source: SourceConfig) -> List[FetchedItem]:
+        """从 API 获取数据"""
+        kwargs = {
+            "url": source.url,
+            "method": source.method,
+            "timeout": self.config.settings.timeout,
+        }
+        
+        # 添加 headers
+        headers = dict(source.headers)
+        if source.auth:
+            if source.auth.get("type") == "bearer":
+                headers["Authorization"] = f"Bearer {source.auth.get('token', '')}"
+        kwargs["headers"] = headers
+        
+        # 发送请求
+        response = self.session.request(**kwargs)
+        response.raise_for_status()
+        
+        # 解析 JSON
+        try:
+            json_data = response.json()
+        except Exception as e:
+            logger.error(f"解析 JSON 失败: {e}")
+            return []
+        
+        # 转换为自己需要的格式
+        items = []
+        if isinstance(json_data, list):
+            data_list = json_data
+        elif isinstance(json_data, dict):
+            # 尝试找到数据列表
+            data_list = json_data.get("data", []) or [json_data]
+        else:
+            logger.warning(f"未知的 JSON 格式: {type(json_data)}")
+            return []
+        
+        for idx, item in enumerate(data_list):
+            if isinstance(item, dict):
+                title = item.get("title", item.get("name", f"Item {idx}"))
+                content = item.get("content", item.get("description", item.get("body", "")))
+                url = item.get("url", item.get("link"))
+                date = item.get("date", item.get("created_at", item.get("published")))
+            else:
+                title = str(item)
+                content = str(item)
+                url = None
+                date = None
+            
+            items.append(FetchedItem(
+                source=source.name,
+                title=title,
+                content=content,
+                url=url,
+                date=date,
+                metadata={"raw": item}
+            ))
+        
+        return items
+    
+    def _fetch_web(self, source: SourceConfig) -> List[FetchedItem]:
+        """从网页获取数据"""
+        response = self.session.get(
+            source.url,
+            timeout=self.config.settings.timeout
+        )
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, "lxml")
+        
+        # 如果指定了选择器
+        if source.selector:
+            elements = soup.select(source.selector)
+        else:
+            elements = [soup]
+        
+        items = []
+        for element in elements:
+            # 提取字段
+            if source.fields:
+                title = element.select_one(source.fields.get("title", "h1")).get_text(strip=True) if element.select_one(source.fields.get("title", "h1")) else ""
+                content = element.select_one(source.fields.get("content", ".content")).get_text(strip=True) if element.select_one(source.fields.get("content", ".content")) else ""
+                date = element.select_one(source.fields.get("date", ".date"))
+                date = date.get_text(strip=True) if date else None
+            else:
+                # 默认提取标题和内容
+                title = element.select_one("h1, h2, h3, title")
+                title = title.get_text(strip=True) if title else ""
+                content = element.get_text(strip=True)
+                date = element.select_one("[datetime], time, .date")
+                date = date.get_text(strip=True) if date else None
+            
+            items.append(FetchedItem(
+                source=source.name,
+                title=title or "Untitled",
+                content=content,
+                url=source.url,
+                date=date,
+                metadata={"html": str(element)}
+            ))
+        
+        return items
+    
+    def _fetch_arxiv(self, source: SourceConfig) -> List[FetchedItem]:
+        """从 arXiv 获取论文"""
+        import urllib.parse
+        from datetime import datetime
+        
+        # 解析 arXiv 配置
+        search_query = source.auth.get("search_query", "all") if source.auth else "all"
+        max_results = source.auth.get("max_results", 10) if source.auth else 10
+        sort_by = source.auth.get("sort_by", "submittedDate") if source.auth else "submittedDate"
+        sort_order = source.auth.get("sort_order", "descending") if source.auth else "descending"
+        categories = source.auth.get("categories", []) if source.auth else []
+        
+        # 构建查询
+        query_parts = [search_query]
+        for cat in categories:
+            if cat.startswith("cat:"):
+                query_parts.append(cat)
+            else:
+                query_parts.append(f"cat:{cat}")
+        
+        query = "+AND+".join(query_parts)
+        
+        # 构建 API URL
+        base_url = "http://export.arxiv.org/api/query"
+        params = {
+            "search_query": query,
+            "max_results": max_results,
+            "sortBy": sort_by,
+            "sortOrder": sort_order,
+        }
+        
+        url = f"{base_url}?{urllib.parse.urlencode(params)}"
+        logger.info(f"查询 arXiv API: {url}")
+        
+        response = self.session.get(url, timeout=self.config.settings.timeout)
+        response.raise_for_status()
+        
+        # 解析 XML 响应
+        soup = BeautifulSoup(response.text, "lxml")
+        entries = soup.find_all("entry")
+        
+        items = []
+        for entry in entries:
+            # 提取论文信息
+            title = entry.find("title")
+            title = title.get_text(strip=True).replace("\n", " ") if title else ""
+            
+            summary = entry.find("summary")
+            abstract = summary.get_text(strip=True).replace("\n", " ") if summary else ""
+            
+            # 作者
+            authors = []
+            for author in entry.find_all("author"):
+                name = author.find("name")
+                if name:
+                    authors.append(name.get_text(strip=True))
+            
+            # 日期
+            published = entry.find("published")
+            date = published.get_text(strip=True) if published else None
+            
+            # 分类
+            categories_list = []
+            for cat in entry.find_all("category"):
+                term = cat.get("term")
+                if term:
+                    categories_list.append(term)
+            
+            # PDF URL
+            pdf_link = entry.find("link", {"title": "pdf"})
+            url = pdf_link.get("href") if pdf_link else None
+            
+            # arXiv ID
+            arxiv_id = entry.find("id")
+            arxiv_id = arxiv_id.get_text(strip=True).split("/")[-1] if arxiv_id else None
+            
+            items.append(FetchedItem(
+                source=source.name,
+                title=f"[{arxiv_id}] {title}" if arxiv_id else title,
+                content=abstract,
+                url=url,
+                date=date,
+                authors=authors,
+                abstract=abstract,
+                categories=categories_list,
+                metadata={
+                    "arxiv_id": arxiv_id,
+                    "raw": str(entry)
+                }
+            ))
+        
+        return items
+    
+    def _fetch_arxiv_rss(self, source: SourceConfig) -> List[FetchedItem]:
+        """从 arXiv RSS/Atom 获取最新论文"""
+        from datetime import datetime
+        import warnings
+        from bs4 import XMLParsedAsHTMLWarning
+        
+        # 忽略 XML 警告
+        warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+        
+        # 获取分类列表
+        categories = source.auth.get("categories", []) if source.auth else []
+        
+        if not categories:
+            logger.warning("arXiv RSS 需要指定分类")
+            return []
+        
+        items = []
+        
+        for cat in categories:
+            # 构建 RSS/Atom URL
+            # 支持 rss 或 atom
+            feed_type = source.auth.get("feed_type", "rss") if source.auth else "rss"
+            
+            if feed_type == "atom":
+                url = f"http://export.arxiv.org/atom/{cat}"
+            else:
+                url = f"http://export.arxiv.org/rss/{cat}"
+            
+            logger.info(f"获取 arXiv RSS: {url}")
+            
+            try:
+                response = self.session.get(url, timeout=self.config.settings.timeout)
+                response.raise_for_status()
+                
+                soup = BeautifulSoup(response.text, "lxml")
+                
+                # 根据 feed 类型选择解析方式
+                entries = soup.find_all("item")
+                if not entries:
+                    entries = soup.find_all("entry")
+                
+                for entry in entries:
+                    # 提取论文信息
+                    title = entry.find("title")
+                    title = title.get_text(strip=True).replace("\n", " ") if title else ""
+                    
+                    # 摘要
+                    description = entry.find("description")
+                    summary = entry.find("summary")
+                    abstract = None
+                    if description:
+                        abstract = description.get_text(strip=True).replace("\n", " ")
+                    elif summary:
+                        abstract = summary.get_text(strip=True).replace("\n", " ")
+                    
+                    # 作者
+                    authors = []
+                    author_tags = entry.find_all("author")
+                    for author in author_tags:
+                        name = author.find("name")
+                        if name:
+                            authors.append(name.get_text(strip=True))
+                    
+                    # 日期 - 尝试多种格式
+                    date = None
+                    
+                    # 方式1: pubDate
+                    pub_date = entry.find("pubDate")
+                    if pub_date:
+                        date_str = pub_date.get_text(strip=True)
+                        try:
+                            from email.utils import parsedate_to_datetime
+                            dt = parsedate_to_datetime(date_str)
+                            date = dt.isoformat()
+                        except:
+                            pass
+                    
+                    # 方式2: dc:date
+                    if not date:
+                        dc_date = entry.find("dc:date")
+                        if dc_date:
+                            date = dc_date.get_text(strip=True)
+                    
+                    # 方式3: published (Atom)
+                    if not date:
+                        published = entry.find("published")
+                        if published:
+                            date = published.get_text(strip=True)
+                    
+                    # 分类
+                    categories_list = []
+                    cat_tags = entry.find_all("category")
+                    for cat_tag in cat_tags:
+                        term = cat_tag.get_text(strip=True)
+                        if term:
+                            categories_list.append(term)
+                    
+                    # 获取链接
+                    link = entry.find("link")
+                    paper_url = None
+                    arxiv_id = None
+                    if link:
+                        paper_url = link.get_text(strip=True)
+                        if not paper_url:
+                            paper_url = link.get("href")
+                        # 从 URL 提取 arXiv ID
+                        if paper_url and "arxiv.org" in paper_url:
+                            arxiv_id = paper_url.split("/")[-1]
+                            if ".pdf" in arxiv_id:
+                                arxiv_id = arxiv_id.replace(".pdf", "")
+                    
+                    # 如果没有 PDF 链接，尝试构建
+                    if arxiv_id and not paper_url:
+                        paper_url = f"https://arxiv.org/abs/{arxiv_id}"
+                    
+                    # 论文标题加上 ID
+                    title = f"[{arxiv_id}] {title}" if arxiv_id else title
+                    
+                    items.append(FetchedItem(
+                        source=f"{source.name}/{cat}",
+                        title=title,
+                        content=abstract or "",
+                        url=paper_url,
+                        date=date,
+                        authors=authors,
+                        abstract=abstract,
+                        categories=categories_list,
+                        metadata={
+                            "arxiv_id": arxiv_id,
+                            "category": cat,
+                        }
+                    ))
+                    
+            except Exception as e:
+                logger.error(f"获取 {cat} RSS 失败: {e}")
+                continue
+        
+        # 按日期排序，最新的在前
+        items.sort(key=lambda x: x.date or "", reverse=True)
+        
+        # 限制数量
+        max_results = source.auth.get("max_results", 20) if source.auth else 20
+        return items[:max_results]
+    
+    def close(self):
+        """关闭会话"""
+        self.session.close()

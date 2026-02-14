@@ -1,0 +1,54 @@
+# 采集任务配置
+tasks:
+  - name: "arXiv论文"
+    interval: "6h"
+    
+    # 数据源配置
+    sources:
+      # arXiv RSS 订阅
+      - type: "arxiv_rss"
+        name: "AI最新论文"
+        url: "https://arxiv.org"
+        auth:
+          categories:
+            - "cs.RO"
+          max_results: 20
+          feed_type: "rss"
+    
+    # 筛选规则
+    filters:
+      # 关键词筛选 - VLA (大小写敏感)
+      - type: "keyword"
+        keywords: ["VLA"]
+        action: "keep"
+        scope: "all"
+        case_sensitive: true
+      
+      # 长度筛选
+      - type: "length"
+        min: 50
+      
+      # 去重
+      - type: "deduplicate"
+        fields: ["title"]
+    
+    # 模板配置
+    template: "default"
+    output: "arxiv-vla"
+    
+    variables:
+      site_title: "arXiv VLA 论文"
+      site_description: "自动追踪 arXiv 上的 VLA (Vision-Language-Action) 最新论文"
+
+# 全局设置
+settings:
+  timezone: "Asia/Shanghai"
+  max_workers: 3
+  timeout: 30
+  retry: 3
+  user_agent: "AutoResearcher/1.0 (GitHub Actions)"
+
+# GitHub Pages 部署配置
+github:
+  branch: "gh-pages"
+  dir: "dists/latest"
