@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>具身智能 &amp; VLA 学术论文</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .meta {
+            margin-top: 15px;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+        
+        .config-info {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .config-info h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+        
+        .config-info .source-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .config-info .source-tag {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+        }
+        
+        .config-info .filter-list {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .config-info .filter-list strong {
+            color: #333;
+        }
+        
+        .config-info .source-stats {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        
+        .config-info .source-stats strong {
+            color: #333;
+        }
+        
+        .config-info .stat-tag {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            margin-right: 8px;
+            display: inline-block;
+            margin-top: 5px;
+        }
+        
+        .items {
+            display: grid;
+            gap: 20px;
+        }
+        
+        .item {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .item h2 {
+            font-size: 1.4em;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .item .authors {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+        
+        .item .content {
+            color: #555;
+            margin: 10px 0;
+        }
+        
+        .item .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+            font-size: 0.85em;
+            color: #888;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .item .source-info {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .item .source-type {
+            background: #667eea;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+        }
+        
+        .item .venue {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+        }
+        
+        .item .categories {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        
+        .item .category {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+        }
+        
+        .item .date {
+            color: #666;
+        }
+        
+        .item a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .item a:hover {
+            text-decoration: underline;
+        }
+        
+        .btn-pdf {
+            display: inline-block;
+            background: #d32f2f;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+        
+        .btn-pdf:hover {
+            background: #b71c1c;
+            text-decoration: none;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: #888;
+            font-size: 0.9em;
+        }
+        
+        .empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>具身智能 &amp; VLA 学术论文</h1>
+            <p>自动追踪 CVPR, NeurIPS, ICLR, CoRL, RSS 等顶会最新具身智能、VLA、机器人相关论文</p>
+            <div class="meta">
+                生成时间: 2026-02-15 12:27:58
+            </div>
+        </header>
+        
+        
+        <div class="config-info">
+            <h3>📋 配置信息</h3>
+            <div class="source-list">
+                <strong>数据源:</strong>
+                
+                    
+                    
+                        
+                        <span class="source-tag">DBLP</span>
+                        
+                        
+                    
+                        
+                        
+                    
+                        
+                        <span class="source-tag">arXiv</span>
+                        
+                        
+                    
+                        
+                        
+                    
+                
+            </div>
+            
+            
+            
+            
+            <div class="filter-list">
+                <strong>关键词过滤:</strong>
+                
+                    
+                        
+                            VLA, Vision-Language-Action, Vision Language Action, embodied, embodied intelligence, 具身智能, robot, robotics, robotic, 机器人, manipulation, grasping, dexterous manipulation, navigation, visual navigation, language navigation, humanoid, android, 仿人机器人, sim-to-real, domain randomization, sim2real, reinforcement learning, RL, 强化学习, imitation learning, behavior cloning, 模仿学习, LLM robot, large language model robot, 语言模型机器人, multimodal, multimodal learning, foundation model, visual foundation model, scene understanding, 3D understanding, object detection, object recognition, semantic understanding, scene graph
+                        
+                    
+                        
+                    
+                        
+                    
+                
+            </div>
+        </div>
+        
+        <div class="items">
+            
+                <div class="empty">
+                    <p>暂无内容</p>
+                </div>
+            
+        </div>
+        
+        <footer>
+            <p>由 <a href="https://github.com/your-repo/auto-researcher">AutoResearcher</a> 自动生成</p>
+        </footer>
+    </div>
+</body>
+</html>
